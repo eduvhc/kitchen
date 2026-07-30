@@ -9,19 +9,9 @@ namespace EmailService.IntegrationTests.Features.Templates;
 public class TemplateEndpointTests : ApiTest
 {
     [TestMethod]
-    public async Task Refuses_a_non_admin_key()
-    {
-        using var client = Factory.CreateSenderClient();
-
-        using var response = await client.GetAsync(new Uri("/v1/templates", UriKind.Relative), CancellationToken);
-
-        Assert.AreEqual(HttpStatusCode.Forbidden, response.StatusCode);
-    }
-
-    [TestMethod]
     public async Task Creates_then_updates_a_template()
     {
-        using var client = Factory.CreateAdminClient();
+        using var client = Factory.CreateApiClient();
 
         using var created = await client.PutAsJsonAsync(
             "/v1/templates/receipt",
@@ -47,7 +37,7 @@ public class TemplateEndpointTests : ApiTest
     [TestMethod]
     public async Task Rejects_a_template_that_does_not_parse()
     {
-        using var client = Factory.CreateAdminClient();
+        using var client = Factory.CreateApiClient();
 
         using var response = await client.PutAsJsonAsync(
             "/v1/templates/broken",
@@ -60,7 +50,7 @@ public class TemplateEndpointTests : ApiTest
     [TestMethod]
     public async Task Previews_a_template_without_sending()
     {
-        using var client = Factory.CreateAdminClient();
+        using var client = Factory.CreateApiClient();
         using var upsert = await client.PutAsJsonAsync(
             "/v1/templates/welcome",
             new { subject = "Welcome {{ name }}", html = "<p>Hi {{ name }}</p>" },
@@ -83,7 +73,7 @@ public class TemplateEndpointTests : ApiTest
     [TestMethod]
     public async Task Deletes_a_template()
     {
-        using var client = Factory.CreateAdminClient();
+        using var client = Factory.CreateApiClient();
         using var upsert = await client.PutAsJsonAsync("/v1/templates/gone", new { subject = "Bye" }, CancellationToken);
         Assert.AreEqual(HttpStatusCode.OK, upsert.StatusCode);
 

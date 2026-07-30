@@ -8,29 +8,9 @@ namespace EmailService.IntegrationTests.Features.Emails;
 public class SendEmailEndpointTests : ApiTest
 {
     [TestMethod]
-    public async Task Rejects_a_request_without_an_api_key()
-    {
-        using var client = Factory.CreateClientWithKey(null);
-
-        using var response = await client.PostAsJsonAsync("/v1/emails", new { to = new[] { "ada@example.com" } }, CancellationToken);
-
-        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
-    }
-
-    [TestMethod]
-    public async Task Rejects_an_unknown_api_key()
-    {
-        using var client = Factory.CreateClientWithKey("nope");
-
-        using var response = await client.GetAsync(new Uri("/v1/emails", UriKind.Relative), CancellationToken);
-
-        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
-    }
-
-    [TestMethod]
     public async Task Queues_an_email_and_returns_created()
     {
-        using var client = Factory.CreateSenderClient();
+        using var client = Factory.CreateApiClient();
 
         using var response = await client.PostAsJsonAsync(
             "/v1/emails",
@@ -45,13 +25,30 @@ public class SendEmailEndpointTests : ApiTest
         Assert.AreEqual($"/v1/emails/{body.Id}", response.Headers.Location?.OriginalString);
 
         var stored = await WithQueueAsync(queue => queue.FindAsync(body.Id));
-        Assert.AreEqual("sender", stored!.Source);
+        Assert.AreEqual("tests", stored!.Source);
+    }
+
+    [TestMethod]
+    public async Task Records_no_source_when_the_header_is_absent()
+    {
+        using var client = Factory.CreateApiClient(source: null);
+
+        using var response = await client.PostAsJsonAsync(
+            "/v1/emails",
+            new { to = new[] { "ada@example.com" }, subject = "Hello", text = "Hi" },
+            CancellationToken);
+
+        Assert.AreEqual(HttpStatusCode.Created, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<EmailResponse>(CancellationToken);
+        var stored = await WithQueueAsync(queue => queue.FindAsync(body!.Id));
+        Assert.IsNull(stored!.Source);
     }
 
     [TestMethod]
     public async Task Replays_an_idempotent_request_without_queueing_twice()
     {
-        using var client = Factory.CreateSenderClient();
+        using var client = Factory.CreateApiClient();
         var request = new
         {
             to = new[] { "ada@example.com" },
@@ -77,7 +74,7 @@ public class SendEmailEndpointTests : ApiTest
     [TestMethod]
     public async Task Returns_a_problem_document_for_an_invalid_request()
     {
-        using var client = Factory.CreateSenderClient();
+        using var client = Factory.CreateApiClient();
 
         using var response = await client.PostAsJsonAsync(
             "/v1/emails",
@@ -92,7 +89,7 @@ public class SendEmailEndpointTests : ApiTest
     public async Task Reads_one_email_back()
     {
         var queued = await WithQueueAsync(queue => queue.EnqueueAsync(NewMessage()));
-        using var client = Factory.CreateSenderClient();
+        using var client = Factory.CreateApiClient();
 
         var body = await client.GetFromJsonAsync<EmailResponse>($"/v1/emails/{queued.Id}", CancellationToken);
 
@@ -102,7 +99,7 @@ public class SendEmailEndpointTests : ApiTest
     [TestMethod]
     public async Task Returns_not_found_for_an_unknown_id()
     {
-        using var client = Factory.CreateSenderClient();
+        using var client = Factory.CreateApiClient();
 
         using var response = await client.GetAsync(new Uri($"/v1/emails/{Guid.CreateVersion7()}", UriKind.Relative), CancellationToken);
 
@@ -113,7 +110,7 @@ public class SendEmailEndpointTests : ApiTest
     public async Task Cancels_a_queued_email()
     {
         var queued = await WithQueueAsync(queue => queue.EnqueueAsync(NewMessage()));
-        using var client = Factory.CreateSenderClient();
+        using var client = Factory.CreateApiClient();
 
         using var cancelled = await client.PostAsync(new Uri($"/v1/emails/{queued.Id}/cancel", UriKind.Relative), null, CancellationToken);
         using var again = await client.PostAsync(new Uri($"/v1/emails/{queued.Id}/cancel", UriKind.Relative), null, CancellationToken);
@@ -125,14 +122,14 @@ public class SendEmailEndpointTests : ApiTest
     [TestMethod]
     public async Task Renders_a_stored_template_when_sending()
     {
-        using var admin = Factory.CreateAdminClient();
+        using var admin = Factory.CreateApiClient();
         using var upsert = await admin.PutAsJsonAsync(
             "/v1/templates/welcome",
             new { subject = "Welcome {{ name }}", html = "<p>Hi {{ name }}</p>" },
             CancellationToken);
         Assert.AreEqual(HttpStatusCode.OK, upsert.StatusCode);
 
-        using var sender = Factory.CreateSenderClient();
+        using var sender = Factory.CreateApiClient();
         using var response = await sender.PostAsJsonAsync(
             "/v1/emails",
             new { to = new[] { "ada@example.com" }, template = "welcome", model = new { name = "Ada" } },

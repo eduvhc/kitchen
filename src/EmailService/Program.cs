@@ -1,4 +1,3 @@
-using EmailService.Authentication;
 using EmailService.Features.Dispatch;
 using EmailService.Features.Emails;
 using EmailService.Features.Templates;
@@ -20,7 +19,6 @@ builder.Services.AddEmails();
 builder.Services.AddTemplates();
 builder.Services.AddDispatch();
 
-builder.Services.AddApiKeyAuthentication();
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks().AddDbContextCheck<EmailDbContext>();
@@ -29,8 +27,6 @@ var app = builder.Build();
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
-app.UseAuthentication();
-app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())
 {

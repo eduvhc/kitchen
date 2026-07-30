@@ -17,7 +17,7 @@ public static class EmailsFeature
 
     public static IEndpointRouteBuilder MapEmails(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/v1/emails").RequireAuthorization().WithTags("Emails");
+        var group = app.MapGroup("/v1/emails").WithTags("Emails");
 
         group.MapEndpoint<SendEmailEndpoint>();
         group.MapEndpoint<GetEmailEndpoint>();

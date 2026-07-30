@@ -35,14 +35,14 @@ public class EmailDispatcherTests : ApiTest
     [TestMethod]
     public async Task Delivers_the_rendered_template_body()
     {
-        using var admin = Factory.CreateAdminClient();
+        using var admin = Factory.CreateApiClient();
         using var upsert = await admin.PutAsJsonAsync(
             "/v1/templates/welcome",
             new { subject = "Welcome {{ name }}", html = "<p>Hi {{ name }}</p>" },
             CancellationToken);
         upsert.EnsureSuccessStatusCode();
 
-        using var sender = Factory.CreateSenderClient();
+        using var sender = Factory.CreateApiClient();
         using var send = await sender.PostAsJsonAsync(
             "/v1/emails",
             new { to = new[] { "grace@example.com" }, template = "welcome", model = new { name = "Grace" } },

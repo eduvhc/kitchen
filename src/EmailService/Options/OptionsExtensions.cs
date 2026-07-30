@@ -7,7 +7,6 @@ public static class OptionsExtensions
         services.Configure<SmtpOptions>(configuration.GetSection(SmtpOptions.SectionName));
         services.Configure<DispatcherOptions>(configuration.GetSection(DispatcherOptions.SectionName));
         services.Configure<EmailDefaultsOptions>(configuration.GetSection(EmailDefaultsOptions.SectionName));
-        services.Configure<ApiKeyOptions>(configuration.GetSection(ApiKeyOptions.SectionName));
 
         return services;
     }

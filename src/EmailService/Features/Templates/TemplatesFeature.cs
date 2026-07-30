@@ -17,7 +17,7 @@ public static class TemplatesFeature
 
     public static IEndpointRouteBuilder MapTemplates(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/v1/templates").RequireAuthorization("Admin").WithTags("Templates");
+        var group = app.MapGroup("/v1/templates").WithTags("Templates");
 
         group.MapEndpoint<ListTemplatesEndpoint>();
         group.MapEndpoint<GetTemplateEndpoint>();

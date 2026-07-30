@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using EmailService.Common;
 using EmailService.Templating;
 
@@ -6,6 +5,8 @@ namespace EmailService.Features.Emails.SendEmail;
 
 public sealed class SendEmailEndpoint : IEndpoint
 {
+    public const string SourceHeader = "X-Source";
+
     public static void Map(IEndpointRouteBuilder app) =>
         app.MapPost("/", HandleAsync)
             .WithName("SendEmail")
@@ -14,12 +15,14 @@ public sealed class SendEmailEndpoint : IEndpoint
     private static async Task<IResult> HandleAsync(
         SendEmailRequest request,
         SendEmailHandler handler,
-        ClaimsPrincipal user,
+        HttpContext context,
         CancellationToken ct)
     {
+        var source = context.Request.Headers[SourceHeader].FirstOrDefault();
+
         try
         {
-            var result = await handler.HandleAsync(request, user.Identity?.Name, ct);
+            var result = await handler.HandleAsync(request, source, ct);
 
             return result.Deduplicated
                 ? Results.Ok(result.Email)

@@ -10,9 +10,6 @@ namespace EmailService.IntegrationTests;
 [TestClass]
 public static class TestHost
 {
-    public const string AdminApiKey = "test-admin-key";
-    public const string SenderApiKey = "test-sender-key";
-
     public static TestEnvironment Environment { get; } = new();
 
     public static PostgresFixture Postgres { get; } = new(
@@ -41,11 +38,7 @@ public static class TestHost
             .AddSetting("Smtp:Port", () => Smtp.SmtpPort.ToString())
             .AddSetting("Smtp:Security", () => "None")
             .AddSetting("EmailDefaults:FromAddress", () => "no-reply@example.com")
-            .AddSetting("EmailDefaults:FromName", () => "Example")
-            .AddSetting("ApiKeys:Keys:admin:Key", () => AdminApiKey)
-            .AddSetting("ApiKeys:Keys:admin:IsAdmin", () => "true")
-            .AddSetting("ApiKeys:Keys:sender:Key", () => SenderApiKey)
-            .AddSetting("ApiKeys:Keys:sender:IsAdmin", () => "false");
+            .AddSetting("EmailDefaults:FromName", () => "Example");
 
         await Environment.StartAsync(context.CancellationToken);
 

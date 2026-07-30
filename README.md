@@ -10,7 +10,7 @@ No broker, no Redis, no cron. The queue is a Postgres table claimed with `SELECT
 | Storage | Postgres 17 (EF Core 10, `email` schema) |
 | Transport | SMTP via MailKit — swap in Resend/SES by implementing one interface |
 | Templates | Scriban, stored in Postgres, editable at runtime |
-| Auth | API keys, with an admin scope for template management |
+| Auth | None — the service trusts its network; see [Deployment](#deployment-notes) |
 | Tests | MSTest — unit with fakes, integration on real containers |
 
 ## Quick start
@@ -20,11 +20,11 @@ docker compose up -d postgres mailpit
 dotnet run --project src/EmailService
 ```
 
-Postgres listens on `5433`, Mailpit on `1026` (SMTP) and `8026` (web UI), chosen to stay clear of other local stacks. Development runs apply migrations at startup and accept the API key `dev-key`.
+Postgres listens on `5433`, Mailpit on `1026` (SMTP) and `8026` (web UI), chosen to stay clear of other local stacks. Development runs apply migrations at startup.
 
 ```bash
 curl -X POST localhost:5294/v1/emails \
-  -H 'X-Api-Key: dev-key' -H 'Content-Type: application/json' \
+  -H 'Content-Type: application/json' \
   -d '{"to":["someone@example.com"],"subject":"Hello","html":"<p>Hello</p>"}'
 ```
 
@@ -70,7 +70,6 @@ src/EmailService/
   Persistence/                   EmailDbContext, Configurations/, Migrations/
   Transport/                     IEmailSender + SendResult, Smtp/SmtpEmailSender
   Templating/                    ITemplateRenderer, ScribanTemplateRenderer
-  Authentication/                API-key scheme + Admin policy
   Common/                        IEndpoint, MapEndpoint<T>(), ValidationException
 
 tests/EmailService.Tests/             unit tests, mirrors the slice folders
@@ -83,7 +82,9 @@ Adding a use case: create `Features/<Feature>/<UseCase>/`, drop in the endpoint 
 
 ## API
 
-Every route except `/health` requires `X-Api-Key`. Template routes additionally require a key marked `IsAdmin`.
+The API is unauthenticated by design. Authentication and authorization are platform concerns — a gateway, service mesh, or network boundary decides who may call this service, and the service itself only sends email. **It must never be routable from outside that boundary.** See [Deployment](#deployment-notes).
+
+Send requests may carry an `X-Source` header naming the calling system. It is recorded on the email as `source` for filtering and auditing, and is treated as a label, not a credential — nothing is trusted or granted based on it.
 
 | Method | Route | Purpose |
 | --- | --- | --- |
@@ -129,11 +130,11 @@ Reusing an `idempotencyKey` returns `200` with the original email instead of que
 
 ```bash
 curl -X PUT localhost:5294/v1/templates/welcome \
-  -H 'X-Api-Key: dev-key' -H 'Content-Type: application/json' \
+  -H 'Content-Type: application/json' \
   -d '{"subject":"Welcome {{ name }}","html":"<p>Hi {{ name }}</p>"}'
 
 curl -X POST localhost:5294/v1/emails \
-  -H 'X-Api-Key: dev-key' -H 'Content-Type: application/json' \
+  -H 'Content-Type: application/json' -H 'X-Source: billing' \
   -d '{"to":["someone@example.com"],"template":"welcome","model":{"name":"Ada"}}'
 ```
 
@@ -162,11 +163,8 @@ Bind through appsettings or environment variables (`Section__Key`).
 | `Dispatcher:LockDurationSeconds` | `120` | Must exceed the worst-case send time |
 | `Dispatcher:BaseRetryDelaySeconds` | `30` | Doubles per attempt |
 | `Dispatcher:MaxRetryDelaySeconds` | `3600` | |
-| `ApiKeys:Enabled` | `true` | `false` disables auth entirely; local development only |
-| `ApiKeys:Keys:<name>:Key` | none | The secret callers send; the name is recorded as the email's `source` |
-| `ApiKeys:Keys:<name>:IsAdmin` | `false` | Required for template routes |
 
-Two settings exist only for local development and must stay off elsewhere: `ApiKeys:Enabled=false` removes authentication from the whole API, and `Smtp:AcceptAllCertificates=true` disables TLS certificate validation. Real API keys and SMTP passwords belong in a secret store or environment variables, never in appsettings.
+One setting exists only for local development and must stay off elsewhere: `Smtp:AcceptAllCertificates=true` disables TLS certificate validation. SMTP passwords belong in a secret store or environment variables, never in appsettings.
 
 ## Migrations
 
@@ -209,6 +207,14 @@ public class ResendEmailSender : IEmailSender
 Return `SendResult.Permanent` for failures retrying cannot fix — the dispatcher sends those straight to `Dead` instead of burning attempts. The queue, dispatcher, and API are untouched.
 
 ## Deployment notes
+
+**The service has no authentication of its own, so the deployment must supply it.** Anything that can reach the port can send mail signed by your domain's SPF/DKIM records, and can read every stored email — recipients, subjects, bodies, and template models — through `GET /v1/emails`. Before deploying, make sure one of these is true:
+
+- a service mesh enforces mTLS and an authorization policy naming the services allowed to call this one, or
+- an authenticating gateway is the only route in, and the service accepts traffic from it alone, or
+- the service is bound to a private network with no ingress and no public load balancer.
+
+"Nothing has exposed it yet" is not one of those. Verify with an unauthenticated request from outside the intended boundary; it should not connect.
 
 - The image runs as a non-root user and listens on `8080`.
 - `/health` covers liveness and Postgres reachability; point both probes at it.

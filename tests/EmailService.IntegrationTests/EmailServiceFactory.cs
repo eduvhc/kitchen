@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using EmailService.Features.Emails.SendEmail;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using TestingKit;
@@ -14,17 +15,13 @@ public class EmailServiceFactory : TestingKitWebApplicationFactory<Program>
 
     public FakeTimeProvider Clock { get; } = new(new DateTimeOffset(2026, 1, 1, 9, 0, 0, TimeSpan.Zero));
 
-    public HttpClient CreateAdminClient() => CreateClientWithKey(TestHost.AdminApiKey);
-
-    public HttpClient CreateSenderClient() => CreateClientWithKey(TestHost.SenderApiKey);
-
-    public HttpClient CreateClientWithKey(string? apiKey)
+    public HttpClient CreateApiClient(string? source = "tests")
     {
         var client = CreateClient();
 
-        if (apiKey is not null)
+        if (source is not null)
         {
-            client.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
+            client.DefaultRequestHeaders.Add(SendEmailEndpoint.SourceHeader, source);
         }
 
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
