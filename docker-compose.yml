@@ -1,0 +1,45 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: emailservice
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1026:1025"
+      - "8026:8025"
+
+  api:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=emailservice;Username=postgres;Password=postgres"
+      Database__MigrateOnStartup: "true"
+      Smtp__Host: mailpit
+      Smtp__Port: "1025"
+      Smtp__Security: None
+      EmailDefaults__FromAddress: no-reply@example.com
+      ApiKeys__Keys__local__Key: dev-key
+      ApiKeys__Keys__local__IsAdmin: "true"
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres-data:
