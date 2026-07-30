@@ -1,4 +1,6 @@
 using EmailService.Common;
+using EmailService.Features.Emails.Abstractions;
+using EmailService.Features.Emails.Contracts;
 
 namespace EmailService.Features.Emails.GetEmail;
 

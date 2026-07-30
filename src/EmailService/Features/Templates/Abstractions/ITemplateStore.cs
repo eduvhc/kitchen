@@ -1,4 +1,6 @@
-namespace EmailService.Features.Templates;
+using EmailService.Features.Templates.Domain;
+
+namespace EmailService.Features.Templates.Abstractions;
 
 public interface ITemplateStore
 {

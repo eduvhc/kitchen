@@ -1,3 +1,4 @@
+using EmailService.Templating.Abstractions;
 using EmailService.Templating;
 
 namespace EmailService.Tests.Templating;

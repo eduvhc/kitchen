@@ -28,11 +28,3 @@ public record SendEmailRequest
     [Range(1, 20)]
     public int? MaxAttempts { get; init; }
 }
-
-public record AttachmentDto
-{
-    public required string FileName { get; init; }
-    public required string ContentType { get; init; }
-    public required string Content { get; init; }
-    public string? ContentId { get; init; }
-}

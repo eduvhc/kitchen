@@ -1,4 +1,6 @@
-namespace EmailService.Features.Emails;
+using EmailService.Features.Emails.Domain;
+
+namespace EmailService.Features.Emails.Abstractions;
 
 public interface IEmailQueue
 {
@@ -18,11 +20,3 @@ public interface IEmailQueue
 
     Task<bool> CancelAsync(Guid id, CancellationToken ct = default);
 }
-
-public record EmailQueryFilter(
-    EmailStatus? Status = null,
-    string? Recipient = null,
-    string? TemplateKey = null,
-    string? Source = null,
-    int Limit = 50,
-    int Offset = 0);

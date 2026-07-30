@@ -1,18 +1,10 @@
 using EmailService.Common;
-using EmailService.Templating;
+using EmailService.Features.Templates.Abstractions;
+using EmailService.Features.Templates.Contracts;
+using EmailService.Features.Templates.Domain;
+using EmailService.Templating.Abstractions;
 
 namespace EmailService.Features.Templates.UpsertTemplate;
-
-public record UpsertTemplateRequest
-{
-    public string? Description { get; init; }
-    public required string Subject { get; init; }
-    public string? Html { get; init; }
-    public string? Text { get; init; }
-    public string? From { get; init; }
-    public string? FromName { get; init; }
-    public bool IsActive { get; init; } = true;
-}
 
 public sealed class UpsertTemplateEndpoint : IEndpoint
 {

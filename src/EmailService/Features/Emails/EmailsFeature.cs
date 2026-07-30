@@ -1,9 +1,10 @@
 using EmailService.Common;
-using EmailService.RateLimiting;
+using EmailService.Features.Emails.Abstractions;
 using EmailService.Features.Emails.CancelEmail;
 using EmailService.Features.Emails.GetEmail;
 using EmailService.Features.Emails.ListEmails;
 using EmailService.Features.Emails.SendEmail;
+using EmailService.RateLimiting;
 
 namespace EmailService.Features.Emails;
 

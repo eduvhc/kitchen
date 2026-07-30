@@ -1,11 +1,11 @@
-using System.Net.Http.Headers;
 using EmailService.Features.Emails.SendEmail;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
-using TestingKit;
+using System.Net.Http.Headers;
 using TestingKit.AspNetCore;
+using TestingKit;
 
-namespace EmailService.IntegrationTests;
+namespace EmailService.IntegrationTests.Infrastructure;
 
 public class EmailServiceFactory : TestingKitWebApplicationFactory<Program>
 {

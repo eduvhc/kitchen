@@ -1,5 +1,5 @@
-using EmailService.Features.Emails;
-using EmailService.Features.Templates;
+using EmailService.Features.Emails.Domain;
+using EmailService.Features.Templates.Domain;
 using Microsoft.EntityFrameworkCore;
 
 namespace EmailService.Persistence;

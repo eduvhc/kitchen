@@ -1,4 +1,5 @@
-using EmailService.Features.Emails;
+using EmailService.Features.Emails.Abstractions;
+using EmailService.Features.Emails.Domain;
 
 namespace EmailService.Tests.TestDoubles;
 

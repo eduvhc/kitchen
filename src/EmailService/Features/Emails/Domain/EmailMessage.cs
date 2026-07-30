@@ -1,4 +1,4 @@
-namespace EmailService.Features.Emails;
+namespace EmailService.Features.Emails.Domain;
 
 public class EmailMessage
 {
@@ -37,21 +37,4 @@ public class EmailMessage
 
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
-}
-
-public class EmailAttachment
-{
-    public required string FileName { get; set; }
-    public required string ContentType { get; set; }
-    public required string Content { get; set; }
-    public string? ContentId { get; set; }
-}
-
-public enum EmailStatus
-{
-    Queued = 0,
-    Sending = 1,
-    Sent = 2,
-    Dead = 4,
-    Cancelled = 5,
 }

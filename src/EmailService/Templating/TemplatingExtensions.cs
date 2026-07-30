@@ -1,3 +1,5 @@
+using EmailService.Templating.Abstractions;
+
 namespace EmailService.Templating;
 
 public static class TemplatingExtensions

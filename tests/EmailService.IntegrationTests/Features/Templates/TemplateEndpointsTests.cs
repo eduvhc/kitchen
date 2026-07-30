@@ -1,7 +1,8 @@
-using System.Net;
-using System.Net.Http.Json;
-using EmailService.Features.Templates;
+using EmailService.Features.Templates.Contracts;
 using EmailService.Features.Templates.PreviewTemplate;
+using EmailService.IntegrationTests.Infrastructure;
+using System.Net.Http.Json;
+using System.Net;
 
 namespace EmailService.IntegrationTests.Features.Templates;
 

@@ -1,4 +1,5 @@
 using EmailService.Common;
+using EmailService.Features.Emails.Abstractions;
 
 namespace EmailService.Features.Emails.CancelEmail;
 

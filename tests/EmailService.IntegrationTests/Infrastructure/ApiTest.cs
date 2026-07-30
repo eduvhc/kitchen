@@ -1,9 +1,10 @@
-using EmailService.Features.Emails;
+using EmailService.Features.Emails.Abstractions;
+using EmailService.Features.Emails.Domain;
 using Microsoft.Extensions.DependencyInjection;
-using TestingKit;
 using TestingKit.MSTest;
+using TestingKit;
 
-namespace EmailService.IntegrationTests;
+namespace EmailService.IntegrationTests.Infrastructure;
 
 public abstract class ApiTest : IntegrationTest
 {

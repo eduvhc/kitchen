@@ -1,10 +1,11 @@
-using System.Net;
-using System.Net.Http.Json;
-using System.Net.Sockets;
 using EmailService.Features.Dispatch;
-using EmailService.Features.Emails;
+using EmailService.Features.Emails.Domain;
+using EmailService.IntegrationTests.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using System.Net.Http.Json;
+using System.Net.Sockets;
+using System.Net;
 
 namespace EmailService.IntegrationTests.Features.Dispatch;
 

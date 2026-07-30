@@ -1,6 +1,7 @@
-using System.Net.Mail;
 using EmailService.Common;
+using EmailService.Features.Emails.Domain;
 using EmailService.Options;
+using System.Net.Mail;
 
 namespace EmailService.Features.Emails.SendEmail;
 

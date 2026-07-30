@@ -1,3 +1,5 @@
+using EmailService.Features.Emails.Abstractions;
+using EmailService.Features.Emails.Domain;
 using EmailService.Persistence;
 using Microsoft.EntityFrameworkCore;
 

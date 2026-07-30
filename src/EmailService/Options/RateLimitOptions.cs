@@ -10,10 +10,3 @@ public class RateLimitOptions
     public int QueueLimit { get; set; }
     public Dictionary<string, SourceRateLimit> Sources { get; set; } = [];
 }
-
-public class SourceRateLimit
-{
-    public int? PermitLimit { get; set; }
-    public int? WindowSeconds { get; set; }
-    public int? QueueLimit { get; set; }
-}

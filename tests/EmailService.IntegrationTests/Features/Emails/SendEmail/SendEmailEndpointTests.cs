@@ -1,8 +1,11 @@
-using System.Net;
+using EmailService.Features.Emails.Abstractions;
+using EmailService.Features.Emails.Contracts;
+using EmailService.Features.Emails.Domain;
+using EmailService.IntegrationTests.Infrastructure;
 using System.Net.Http.Json;
-using EmailService.Features.Emails;
+using System.Net;
 
-namespace EmailService.IntegrationTests.Features.Emails;
+namespace EmailService.IntegrationTests.Features.Emails.SendEmail;
 
 [TestClass]
 public class SendEmailEndpointTests : ApiTest

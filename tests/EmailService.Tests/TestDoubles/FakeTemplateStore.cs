@@ -1,4 +1,5 @@
-using EmailService.Features.Templates;
+using EmailService.Features.Templates.Abstractions;
+using EmailService.Features.Templates.Domain;
 
 namespace EmailService.Tests.TestDoubles;
 

@@ -1,14 +1,8 @@
 using EmailService.Common;
-using EmailService.Templating;
+using EmailService.Features.Templates.Abstractions;
+using EmailService.Templating.Abstractions;
 
 namespace EmailService.Features.Templates.PreviewTemplate;
-
-public record PreviewTemplateRequest
-{
-    public Dictionary<string, object?> Model { get; init; } = [];
-}
-
-public record PreviewTemplateResponse(string Subject, string? Html, string? Text);
 
 public sealed class PreviewTemplateEndpoint : IEndpoint
 {

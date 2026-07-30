@@ -1,4 +1,6 @@
 using EmailService.Common;
+using EmailService.Features.Templates.Abstractions;
+using EmailService.Features.Templates.Contracts;
 
 namespace EmailService.Features.Templates.ListTemplates;
 

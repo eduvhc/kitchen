@@ -1,7 +1,8 @@
-using System.Net;
+using EmailService.IntegrationTests.Infrastructure;
 using System.Net.Http.Json;
+using System.Net;
 
-namespace EmailService.IntegrationTests;
+namespace EmailService.IntegrationTests.Features.RateLimiting;
 
 [TestClass]
 public class RateLimitingTests : ApiTest

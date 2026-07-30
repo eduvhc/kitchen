@@ -1,4 +1,6 @@
-namespace EmailService.Features.Emails;
+using EmailService.Features.Emails.Domain;
+
+namespace EmailService.Features.Emails.Contracts;
 
 public record EmailResponse(
     Guid Id,

@@ -1,5 +1,5 @@
 using EmailService.Common;
-using EmailService.Templating;
+using EmailService.Templating.Abstractions;
 
 namespace EmailService.Features.Emails.SendEmail;
 

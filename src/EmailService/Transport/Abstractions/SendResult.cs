@@ -1,11 +1,4 @@
-using EmailService.Features.Emails;
-
-namespace EmailService.Transport;
-
-public interface IEmailSender
-{
-    Task<SendResult> SendAsync(EmailMessage message, CancellationToken ct = default);
-}
+namespace EmailService.Transport.Abstractions;
 
 public readonly record struct SendResult(
     bool Success,

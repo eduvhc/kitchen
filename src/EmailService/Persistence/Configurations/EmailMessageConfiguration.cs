@@ -1,9 +1,9 @@
-using System.Text.Json;
-using EmailService.Features.Emails;
-using Microsoft.EntityFrameworkCore;
+using EmailService.Features.Emails.Domain;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace EmailService.Persistence.Configurations;
 

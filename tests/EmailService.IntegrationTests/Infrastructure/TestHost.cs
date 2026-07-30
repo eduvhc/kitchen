@@ -1,11 +1,11 @@
 using EmailService.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using TestingKit;
 using TestingKit.Postgres;
 using TestingKit.Smtp;
+using TestingKit;
 
-namespace EmailService.IntegrationTests;
+namespace EmailService.IntegrationTests.Infrastructure;
 
 [TestClass]
 public static class TestHost

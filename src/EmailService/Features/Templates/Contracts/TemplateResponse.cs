@@ -1,4 +1,6 @@
-namespace EmailService.Features.Templates;
+using EmailService.Features.Templates.Domain;
+
+namespace EmailService.Features.Templates.Contracts;
 
 public record TemplateResponse(
     string Key,

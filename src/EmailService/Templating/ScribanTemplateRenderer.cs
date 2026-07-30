@@ -1,6 +1,7 @@
-using System.Collections.Concurrent;
-using Scriban;
+using EmailService.Templating.Abstractions;
 using Scriban.Runtime;
+using Scriban;
+using System.Collections.Concurrent;
 
 namespace EmailService.Templating;
 

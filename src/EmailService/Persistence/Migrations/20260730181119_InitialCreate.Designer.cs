@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace EmailService.Persistence.Migrations
 {
     [DbContext(typeof(EmailDbContext))]
-    [Migration("20260730135754_InitialCreate")]
+    [Migration("20260730181119_InitialCreate")]
     partial class InitialCreate
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -26,7 +26,7 @@ namespace EmailService.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("EmailService.Features.Emails.EmailMessage", b =>
+            modelBuilder.Entity("EmailService.Features.Emails.Domain.EmailMessage", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -159,7 +159,7 @@ namespace EmailService.Persistence.Migrations
                     b.ToTable("emails", "email");
                 });
 
-            modelBuilder.Entity("EmailService.Features.Templates.EmailTemplate", b =>
+            modelBuilder.Entity("EmailService.Features.Templates.Domain.EmailTemplate", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()

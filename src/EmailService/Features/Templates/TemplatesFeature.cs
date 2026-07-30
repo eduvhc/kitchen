@@ -1,10 +1,11 @@
 using EmailService.Common;
-using EmailService.RateLimiting;
+using EmailService.Features.Templates.Abstractions;
 using EmailService.Features.Templates.DeleteTemplate;
 using EmailService.Features.Templates.GetTemplate;
 using EmailService.Features.Templates.ListTemplates;
 using EmailService.Features.Templates.PreviewTemplate;
 using EmailService.Features.Templates.UpsertTemplate;
+using EmailService.RateLimiting;
 
 namespace EmailService.Features.Templates;
 

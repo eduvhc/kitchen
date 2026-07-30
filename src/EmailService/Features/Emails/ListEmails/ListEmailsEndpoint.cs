@@ -1,4 +1,7 @@
 using EmailService.Common;
+using EmailService.Features.Emails.Abstractions;
+using EmailService.Features.Emails.Contracts;
+using EmailService.Features.Emails.Domain;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EmailService.Features.Emails.ListEmails;

@@ -48,34 +48,50 @@ One project, organised in vertical slices: a use case lives in one folder with i
 
 ```
 src/EmailService/
-  Program.cs                     the only file in the project root
+  Program.cs                       the only file in the project root
+
   Features/
     Emails/
-      EmailMessage.cs            entity + EmailStatus + EmailAttachment
-      EmailResponse.cs
-      IEmailQueue.cs             queue contract
-      EmailQueue.cs              Postgres implementation (SKIP LOCKED claim)
-      EmailsFeature.cs           AddEmails() + MapEmails()
-      SendEmail/                 request, validator, handler, endpoint
+      Abstractions/                IEmailQueue, EmailQueryFilter
+      Domain/                      EmailMessage, EmailAttachment, EmailStatus
+      Contracts/                   EmailResponse
+      EmailQueue.cs                Postgres implementation (SKIP LOCKED claim)
+      EmailsFeature.cs             AddEmails() + MapEmails()
+      SendEmail/                   request, validator, handler, result, endpoint
       GetEmail/ ListEmails/ CancelEmail/
     Templates/
-      EmailTemplate.cs, TemplateResponse.cs
-      ITemplateStore.cs, TemplateStore.cs
+      Abstractions/                ITemplateStore
+      Domain/                      EmailTemplate
+      Contracts/                   TemplateResponse
+      TemplateStore.cs
       TemplatesFeature.cs
       UpsertTemplate/ GetTemplate/ ListTemplates/ DeleteTemplate/ PreviewTemplate/
     Dispatch/
-      EmailDispatcher.cs         BackgroundService: claim, send, retry
+      EmailDispatcher.cs           BackgroundService: claim, send, retry
       DispatchFeature.cs
-  Options/                       Smtp, Dispatcher, EmailDefaults, ApiKey options
-  Persistence/                   EmailDbContext, Configurations/, Migrations/
-  Transport/                     IEmailSender + SendResult, Smtp/SmtpEmailSender
-  RateLimiting/                  per-source fixed-window limiter
-  Templating/                    ITemplateRenderer, ScribanTemplateRenderer
-  Common/                        IEndpoint, MapEndpoint<T>(), ValidationException
 
-tests/EmailService.Tests/             unit tests, mirrors the slice folders
-tests/EmailService.IntegrationTests/  container-backed tests
+  Transport/
+    Abstractions/                  IEmailSender, SendResult
+    Smtp/SmtpEmailSender.cs
+    TransportExtensions.cs
+  Templating/
+    Abstractions/                  ITemplateRenderer, TemplateRenderException
+    ScribanTemplateRenderer.cs
+    TemplatingExtensions.cs
+  Persistence/                     EmailDbContext, Configurations/, Migrations/
+  RateLimiting/                    per-source fixed-window limiter
+  Options/                         Smtp, Dispatcher, EmailDefaults, RateLimit
+  Common/                          IEndpoint, MapEndpoint<T>(), ValidationException
+
+tests/EmailService.Tests/               unit tests, mirrors the slice folders
+tests/EmailService.IntegrationTests/    container-backed tests
+  Infrastructure/                       TestHost, factory, ApiTest base
+  Features/                             mirrors the source slices
 ```
+
+Every abstraction lives in an `Abstractions/` folder directly beside the implementation that satisfies it: `IEmailQueue` sits next to `EmailQueue`, `IEmailSender` next to `Smtp/SmtpEmailSender`. Namespaces follow folders, and each file holds one type.
+
+`Domain/` holds entities EF maps to tables. `Contracts/` holds what crosses the HTTP boundary — the two never share a type, so a column rename cannot silently reshape the API. Per-use-case folders keep everything a slice needs together.
 
 Each feature owns its registration: `Program.cs` calls `AddEmails()`, `AddTemplates()`, `AddDispatch()`, then `MapEmails()`, `MapTemplates()`. Endpoints implement `IEndpoint` (`static abstract Map`), registered explicitly with `group.MapEndpoint<SendEmailEndpoint>()` — no reflection scanning.
 

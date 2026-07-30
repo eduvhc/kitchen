@@ -1,3 +1,4 @@
+using EmailService.Transport.Abstractions;
 using EmailService.Transport.Smtp;
 
 namespace EmailService.Transport;

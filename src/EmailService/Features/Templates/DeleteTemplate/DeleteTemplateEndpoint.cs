@@ -1,4 +1,5 @@
 using EmailService.Common;
+using EmailService.Features.Templates.Abstractions;
 
 namespace EmailService.Features.Templates.DeleteTemplate;
 

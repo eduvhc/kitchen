@@ -1,6 +1,7 @@
-using EmailService.Features.Emails;
+using EmailService.Features.Emails.Abstractions;
+using EmailService.Features.Emails.Domain;
 using EmailService.Options;
-using EmailService.Transport;
+using EmailService.Transport.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace EmailService.Features.Dispatch;

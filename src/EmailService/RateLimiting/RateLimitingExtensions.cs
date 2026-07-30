@@ -1,9 +1,9 @@
-using System.Globalization;
-using System.Threading.RateLimiting;
 using EmailService.Features.Emails.SendEmail;
 using EmailService.Options;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
+using System.Globalization;
+using System.Threading.RateLimiting;
 
 namespace EmailService.RateLimiting;
 

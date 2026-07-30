@@ -1,7 +1,7 @@
 using EmailService.Common;
-using EmailService.Features.Emails;
+using EmailService.Features.Emails.Domain;
 using EmailService.Features.Emails.SendEmail;
-using EmailService.Features.Templates;
+using EmailService.Features.Templates.Domain;
 using EmailService.Options;
 using EmailService.Templating;
 using EmailService.Tests.TestDoubles;

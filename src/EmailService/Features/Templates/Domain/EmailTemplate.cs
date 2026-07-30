@@ -1,4 +1,4 @@
-namespace EmailService.Features.Templates;
+namespace EmailService.Features.Templates.Domain;
 
 public class EmailTemplate
 {

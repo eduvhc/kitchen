@@ -1,5 +1,6 @@
-using EmailService.Features.Emails;
+using EmailService.Features.Emails.Domain;
 using EmailService.Options;
+using EmailService.Transport.Abstractions;
 using MailKit.Net.Smtp;
 using Microsoft.Extensions.Options;
 using MimeKit;

@@ -1,7 +1,10 @@
 using EmailService.Common;
-using EmailService.Features.Templates;
+using EmailService.Features.Emails.Abstractions;
+using EmailService.Features.Emails.Contracts;
+using EmailService.Features.Emails.Domain;
+using EmailService.Features.Templates.Abstractions;
 using EmailService.Options;
-using EmailService.Templating;
+using EmailService.Templating.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace EmailService.Features.Emails.SendEmail;
@@ -101,5 +104,3 @@ public class SendEmailHandler(
 
     private record ResolvedContent(string Subject, string? Html, string? Text, string FromAddress, string? FromName);
 }
-
-public record SendEmailResult(EmailResponse Email, bool Deduplicated);
