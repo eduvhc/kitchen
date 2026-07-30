@@ -6,16 +6,37 @@
   "bump-minor-pre-major": true,
   "bump-patch-for-minor-pre-major": false,
   "changelog-sections": [
-    { "type": "feat", "section": "Features" },
-    { "type": "fix", "section": "Bug Fixes" },
-    { "type": "perf", "section": "Performance" },
-    { "type": "deps", "section": "Dependencies" },
-    { "type": "docs", "section": "Documentation", "hidden": true },
-    { "type": "chore", "section": "Chores", "hidden": true }
+    {
+      "type": "feat",
+      "section": "Features"
+    },
+    {
+      "type": "fix",
+      "section": "Bug Fixes"
+    },
+    {
+      "type": "perf",
+      "section": "Performance"
+    },
+    {
+      "type": "deps",
+      "section": "Dependencies"
+    },
+    {
+      "type": "docs",
+      "section": "Documentation",
+      "hidden": true
+    },
+    {
+      "type": "chore",
+      "section": "Chores",
+      "hidden": true
+    }
   ],
   "packages": {
     ".": {
-      "package-name": "MessagingKit"
+      "package-name": "MessagingKit",
+      "release-as": "0.1.0"
     }
   }
 }
