@@ -189,15 +189,7 @@ dotnet test tests/EmailService.IntegrationTests  # needs Docker
 
 `EmailService.IntegrationTests` runs against real infrastructure using [TestingKit](https://github.com/eduvhc/testing-kit) fixtures — a Postgres container and a Mailpit SMTP container started once per assembly, with Respawn truncating the `email` schema between tests. It covers what fakes cannot: the `SKIP LOCKED` claim query and concurrent claimers, lock expiry and reclaim, retry and dead transitions, the `text[]`/`jsonb` mappings, the unique idempotency index, migrations, API-key auth and the admin policy, and end-to-end delivery asserted against the Mailpit inbox.
 
-TestingKit comes from GitHub Packages, so restore needs credentials for that feed. `nuget.config` reads them from the environment — nothing secret is committed:
-
-```bash
-export GITHUB_PACKAGES_USER=<your-github-user>
-export GITHUB_PACKAGES_TOKEN=<PAT with read:packages>   # or: $(gh auth token)
-dotnet restore
-```
-
-Package source mapping pins `TestingKit*` to that feed and everything else to nuget.org, so a same-named package appearing on nuget.org can never shadow it. In CI, the token can be the workflow's own `GITHUB_TOKEN` with `packages: read`.
+TestingKit is published on nuget.org, so `dotnet restore` needs no credentials or extra feed.
 
 ## Adding an email provider
 
