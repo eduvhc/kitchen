@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>SMTP (Mailpit) Testcontainers fixture with inbox assertions.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Testcontainers" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../TestingKit/TestingKit.csproj" />
+  </ItemGroup>
+
+</Project>
