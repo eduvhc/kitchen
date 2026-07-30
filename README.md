@@ -4,6 +4,21 @@ Reusable integration-test fixtures for .NET 10, built on [Testcontainers](https:
 
 Built for net10.0 with central package management, one package per dependency, a shared reset contract, and Postgres + SMTP fixtures.
 
+## Install
+
+```bash
+dotnet add package TestingKit.Postgres
+dotnet add package TestingKit.Smtp
+dotnet add package TestingKit.MSTest
+```
+
+Packages are published to nuget.org and to GitHub Packages. To use the GitHub Packages feed, add it once:
+
+```bash
+dotnet nuget add source https://nuget.pkg.github.com/eduvhc/index.json \
+  --name testing-kit --username <your-github-user> --password <a-classic-PAT-with-read:packages>
+```
+
 ## Packages
 
 | Package | Contents |
@@ -83,12 +98,35 @@ Settings registered with `AddSetting` are pushed into the host with `UseSetting`
 
 Every fixture accepts a `ConnectionString` in its client options. Set it and the fixture skips Docker and talks to that server instead — useful on a locked-down CI agent or when reproducing against a shared environment. `IsExternal` reports which mode is active. `SmtpFixture` additionally needs `ApiBaseAddress` to reach the mail catcher's HTTP API.
 
+## Releasing
+
+Versioning and publishing are automated; nothing is hand-edited.
+
+1. Land commits on `main` using [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `perf:`, `deps:`).
+2. `release-please` keeps an open release PR with the next SemVer version and the generated `CHANGELOG.md`.
+3. Merging that PR creates the GitHub Release and the `v*` tag.
+4. The same workflow then calls `publish.yml`, which builds, tests, packs (MinVer stamps the version from the tag), attests build provenance, and pushes to nuget.org and GitHub Packages.
+
+`publish.yml` is also reachable directly: push a `v*` tag by hand, or run it from the Actions tab against any ref.
+
+nuget.org authentication uses [Trusted Publishing](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing) — no API key is stored. It needs three one-time setup steps:
+
+- On nuget.org, add a trusted publishing policy for this repository, workflow file `publish.yml`, and environment `nuget`.
+- In repository settings, create the `nuget` environment (add required reviewers if you want a manual gate before a push to nuget.org).
+- Set the repository variable `NUGET_USER` to your nuget.org account name.
+
+Until those exist the `nuget-org` job fails and the `github-packages` job still succeeds, so the packages remain installable from GitHub.
+
+Dependency updates are grouped weekly by Dependabot with a cooldown, so a freshly published upstream version has to age before it lands in a PR.
+
 ## Conventions
 
 - `net10.0`, nullable enabled, warnings as errors, `latest-recommended` analysis.
 - Central package management in `Directory.Packages.props`; no versions in project files.
 - `slnx` solution, `global.json` pinned to the 10.0.3xx SDK band with `latestFeature` roll-forward.
-- Versioned by `MinVer` from `v*` tags; packages build deterministically with SourceLink in CI.
+- Versioned by `MinVer` from `v*` tags, floored at `0.1`; packages build deterministically with SourceLink and ship symbols.
+- Releases driven by `release-please`; dependencies by Dependabot (grouped, with cooldown).
+- Workflows pinned to current majors: `actions/checkout@v7`, `actions/setup-dotnet@v6`, `actions/upload-artifact@v7`, `NuGet/login@v1`, `actions/attest-build-provenance@v4`.
 
 ## Requirements
 
