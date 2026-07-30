@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MessagingKit.Abstractions/MessagingKit.Abstractions.csproj" />
+    <Project Path="src/MessagingKit.Inbox/MessagingKit.Inbox.csproj" />
+    <Project Path="src/MessagingKit.Outbox/MessagingKit.Outbox.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MessagingKit.Tests/MessagingKit.Tests.csproj" />
+  </Folder>
+</Solution>

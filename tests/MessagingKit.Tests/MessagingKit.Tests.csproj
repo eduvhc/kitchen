@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <PackageReference Include="MSTest" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="TestingKit" />
+    <PackageReference Include="TestingKit.MSTest" />
+    <PackageReference Include="TestingKit.Postgres" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/MessagingKit.Abstractions/MessagingKit.Abstractions.csproj" />
+    <ProjectReference Include="../../src/MessagingKit.Inbox/MessagingKit.Inbox.csproj" />
+    <ProjectReference Include="../../src/MessagingKit.Outbox/MessagingKit.Outbox.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+  </ItemGroup>
+
+</Project>
