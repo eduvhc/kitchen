@@ -52,7 +52,6 @@ public enum EmailStatus
     Queued = 0,
     Sending = 1,
     Sent = 2,
-    Retrying = 3,
     Dead = 4,
     Cancelled = 5,
 }

@@ -69,6 +69,7 @@ src/EmailService/
   Options/                       Smtp, Dispatcher, EmailDefaults, ApiKey options
   Persistence/                   EmailDbContext, Configurations/, Migrations/
   Transport/                     IEmailSender + SendResult, Smtp/SmtpEmailSender
+  RateLimiting/                  per-source fixed-window limiter
   Templating/                    ITemplateRenderer, ScribanTemplateRenderer
   Common/                        IEndpoint, MapEndpoint<T>(), ValidationException
 
@@ -84,7 +85,7 @@ Adding a use case: create `Features/<Feature>/<UseCase>/`, drop in the endpoint 
 
 The API is unauthenticated by design. Authentication and authorization are platform concerns — a gateway, service mesh, or network boundary decides who may call this service, and the service itself only sends email. **It must never be routable from outside that boundary.** See [Deployment](#deployment-notes).
 
-Send requests may carry an `X-Source` header naming the calling system. It is recorded on the email as `source` for filtering and auditing, and is treated as a label, not a credential — nothing is trusted or granted based on it.
+Send requests may carry an `X-Source` header naming the calling system. It is recorded on the email as `source` for filtering and auditing, and is the rate-limit partition key. It is a label, not a credential — nothing is trusted or granted based on it.
 
 | Method | Route | Purpose |
 | --- | --- | --- |
@@ -140,6 +141,25 @@ curl -X POST localhost:5294/v1/emails \
 
 Templates are [Scriban](https://github.com/scriban/scriban). A malformed template is rejected at `PUT` time with `422`, so a broken edit cannot reach a send. `POST /v1/templates/{key}/preview` renders against a model without queueing anything.
 
+## Rate limiting
+
+Every `/v1` route is rate limited with a fixed window, partitioned by `X-Source`. Requests without the header fall back to a per-remote-IP partition. Exceeding the limit returns `429` with a `Retry-After` header and a problem document; `/health` is never limited.
+
+```jsonc
+"RateLimit": {
+  "Enabled": true,
+  "PermitLimit": 120,       // per window, per source
+  "WindowSeconds": 60,
+  "QueueLimit": 0,          // 0 rejects immediately instead of waiting
+  "Sources": {
+    "reports": { "PermitLimit": 20 },              // per-source overrides
+    "billing": { "PermitLimit": 600, "WindowSeconds": 60 }
+  }
+}
+```
+
+Two caveats worth knowing. The limiter is **per instance** — with N replicas the effective ceiling is N × `PermitLimit`, so size it accordingly or move the limit to the gateway if you need a global one. And because partitions are created per distinct header value, a caller sending random `X-Source` values would grow the partition table; have the gateway set or strip that header rather than letting arbitrary clients choose it.
+
 ## Configuration
 
 Bind through appsettings or environment variables (`Section__Key`).
@@ -163,6 +183,10 @@ Bind through appsettings or environment variables (`Section__Key`).
 | `Dispatcher:LockDurationSeconds` | `120` | Must exceed the worst-case send time |
 | `Dispatcher:BaseRetryDelaySeconds` | `30` | Doubles per attempt |
 | `Dispatcher:MaxRetryDelaySeconds` | `3600` | |
+| `RateLimit:Enabled` | `true` | `false` disables limiting entirely |
+| `RateLimit:PermitLimit` / `WindowSeconds` | `120` / `60` | Per source, per instance |
+| `RateLimit:QueueLimit` | `0` | Requests queued once the limit is hit; `0` rejects immediately |
+| `RateLimit:Sources:<source>:*` | none | Per-source overrides of the three settings above |
 
 One setting exists only for local development and must stay off elsewhere: `Smtp:AcceptAllCertificates=true` disables TLS certificate validation. SMTP passwords belong in a secret store or environment variables, never in appsettings.
 

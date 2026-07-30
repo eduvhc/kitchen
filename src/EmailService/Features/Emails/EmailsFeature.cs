@@ -1,4 +1,5 @@
 using EmailService.Common;
+using EmailService.RateLimiting;
 using EmailService.Features.Emails.CancelEmail;
 using EmailService.Features.Emails.GetEmail;
 using EmailService.Features.Emails.ListEmails;
@@ -17,7 +18,7 @@ public static class EmailsFeature
 
     public static IEndpointRouteBuilder MapEmails(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/v1/emails").WithTags("Emails");
+        var group = app.MapGroup("/v1/emails").WithTags("Emails").RequireRateLimiting(RateLimitingExtensions.PolicyName);
 
         group.MapEndpoint<SendEmailEndpoint>();
         group.MapEndpoint<GetEmailEndpoint>();

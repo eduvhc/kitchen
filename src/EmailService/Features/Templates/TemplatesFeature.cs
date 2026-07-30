@@ -1,4 +1,5 @@
 using EmailService.Common;
+using EmailService.RateLimiting;
 using EmailService.Features.Templates.DeleteTemplate;
 using EmailService.Features.Templates.GetTemplate;
 using EmailService.Features.Templates.ListTemplates;
@@ -17,7 +18,7 @@ public static class TemplatesFeature
 
     public static IEndpointRouteBuilder MapTemplates(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/v1/templates").WithTags("Templates");
+        var group = app.MapGroup("/v1/templates").WithTags("Templates").RequireRateLimiting(RateLimitingExtensions.PolicyName);
 
         group.MapEndpoint<ListTemplatesEndpoint>();
         group.MapEndpoint<GetTemplateEndpoint>();

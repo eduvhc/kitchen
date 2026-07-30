@@ -38,7 +38,10 @@ public static class TestHost
             .AddSetting("Smtp:Port", () => Smtp.SmtpPort.ToString())
             .AddSetting("Smtp:Security", () => "None")
             .AddSetting("EmailDefaults:FromAddress", () => "no-reply@example.com")
-            .AddSetting("EmailDefaults:FromName", () => "Example");
+            .AddSetting("EmailDefaults:FromName", () => "Example")
+            .AddSetting("RateLimit:PermitLimit", () => "10000")
+            .AddSetting("RateLimit:Sources:limited-source:PermitLimit", () => "3")
+            .AddSetting("RateLimit:Sources:limited-source:WindowSeconds", () => "300");
 
         await Environment.StartAsync(context.CancellationToken);
 

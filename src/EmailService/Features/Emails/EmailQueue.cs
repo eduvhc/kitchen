@@ -145,7 +145,7 @@ public class EmailQueue(EmailDbContext db, TimeProvider clock) : IEmailQueue
         var now = clock.GetUtcNow();
 
         var affected = await db.Emails
-            .Where(e => e.Id == id && (e.Status == EmailStatus.Queued || e.Status == EmailStatus.Retrying))
+            .Where(e => e.Id == id && e.Status == EmailStatus.Queued)
             .ExecuteUpdateAsync(
                 s => s
                     .SetProperty(e => e.Status, EmailStatus.Cancelled)
