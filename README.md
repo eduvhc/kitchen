@@ -69,6 +69,10 @@ src/EmailService/
     Dispatch/
       EmailDispatcher.cs           BackgroundService: claim, send, retry
       DispatchFeature.cs
+    Messages/
+      SendEmailMessageHandler.cs   inbox handler: message to queued email
+      MessagesFeature.cs
+      ReceiveMessage/ GetMessage/
 
   Transport/
     Abstractions/                  IEmailSender, SendResult
@@ -114,6 +118,8 @@ Send requests may carry an `X-Source` header naming the calling system. It is re
 | `PUT` | `/v1/templates/{key}` | Create or replace a template |
 | `DELETE` | `/v1/templates/{key}` | Delete a template |
 | `POST` | `/v1/templates/{key}/preview` | Render a template against a model without sending |
+| `POST` | `/v1/messages` | Accept a message envelope into the inbox |
+| `GET` | `/v1/messages/{id}` | Read the processing state of a received message |
 | `GET` | `/health` | Liveness plus a Postgres check |
 
 OpenAPI is served at `/openapi/v1.json` in Development.
@@ -156,6 +162,37 @@ curl -X POST localhost:5294/v1/emails \
 ```
 
 Templates are [Scriban](https://github.com/scriban/scriban). A malformed template is rejected at `PUT` time with `422`, so a broken edit cannot reach a send. `POST /v1/templates/{key}/preview` renders against a model without queueing anything.
+
+## Inbox
+
+Callers that need to send email as part of their own transaction should not call `POST /v1/emails` directly — a crash between their commit and the call loses the email, and a retry after a timeout sends it twice. They write to a transactional outbox instead and deliver here, which is what `/v1/messages` is for.
+
+```
+billing txn:      invoice row + outbox row     one commit, both or neither
+billing job:      claim row, deliver           retries until accepted
+POST /v1/messages: store by message id         duplicate? 200, nothing queued
+inbox processor:  handle, queue the email      retry with backoff, then dead
+email dispatcher: SMTP send                    the existing pipeline
+```
+
+The envelope is [MessagingKit](https://github.com/eduvhc/messaging-kit)'s shape:
+
+```bash
+curl -X POST localhost:5294/v1/messages \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "id": "019fb353-c9a8-78ae-9d1d-00a86703ef5e",
+    "type": "send-email",
+    "payload": "{\"to\":[\"someone@example.com\"],\"subject\":\"Hi\",\"html\":\"<p>Hi</p>\"}",
+    "createdAt": "2026-07-30T09:00:00Z"
+  }'
+```
+
+`202` means stored; `200` means the id was already seen and nothing was queued a second time. The payload is the same JSON `POST /v1/emails` accepts, so templates, attachments, and scheduling all work unchanged.
+
+Deduplication is the message id, which is the inbox table's primary key — a redelivery cannot create a second row. When the handler queues the email it also passes that id as the `idempotencyKey`, so even a message processed twice by two racing workers converges on one email.
+
+Emails arriving this way are recorded with `source: inbox`.
 
 ## Rate limiting
 
@@ -203,6 +240,10 @@ Bind through appsettings or environment variables (`Section__Key`).
 | `RateLimit:PermitLimit` / `WindowSeconds` | `120` / `60` | Per source, per instance |
 | `RateLimit:QueueLimit` | `0` | Requests queued once the limit is hit; `0` rejects immediately |
 | `RateLimit:Sources:<source>:*` | none | Per-source overrides of the three settings above |
+| `Inbox:Enabled` | `true` | `false` accepts messages but runs no processor |
+| `Inbox:BatchSize` / `Concurrency` | `50` / `4` | |
+| `Inbox:MaxAttempts` | `10` | Then the message is marked `Dead` |
+| `Inbox:BaseRetryDelaySeconds` / `MaxRetryDelaySeconds` | `10` / `3600` | Doubles per attempt |
 
 One setting exists only for local development and must stay off elsewhere: `Smtp:AcceptAllCertificates=true` disables TLS certificate validation. SMTP passwords belong in a secret store or environment variables, never in appsettings.
 
@@ -227,7 +268,15 @@ dotnet test tests/EmailService.IntegrationTests  # needs Docker
 
 `EmailService.IntegrationTests` runs against real infrastructure using [TestingKit](https://github.com/eduvhc/testing-kit) fixtures — a Postgres container and a Mailpit SMTP container started once per assembly, with Respawn truncating the `email` schema between tests. It covers what fakes cannot: the `SKIP LOCKED` claim query and concurrent claimers, lock expiry and reclaim, retry and dead transitions, the `text[]`/`jsonb` mappings, the unique idempotency index, migrations, API-key auth and the admin policy, and end-to-end delivery asserted against the Mailpit inbox.
 
-TestingKit is published on nuget.org, so `dotnet restore` needs no credentials or extra feed.
+TestingKit comes from nuget.org and needs no credentials. MessagingKit is currently published only to GitHub Packages, so restore needs a token for that feed; `nuget.config` reads it from the environment and nothing secret is committed:
+
+```bash
+export GITHUB_PACKAGES_USER=<your-github-user>
+export GITHUB_PACKAGES_TOKEN=<PAT with read:packages>   # or: $(gh auth token)
+dotnet restore
+```
+
+Package source mapping pins `MessagingKit.*` to that feed and everything else to nuget.org. Once MessagingKit is on nuget.org the extra source can go away.
 
 ## Adding an email provider
 

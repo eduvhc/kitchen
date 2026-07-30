@@ -1,5 +1,6 @@
 using EmailService.Features.Dispatch;
 using EmailService.Features.Emails;
+using EmailService.Features.Messages;
 using EmailService.Features.Templates;
 using EmailService.Options;
 using EmailService.Persistence;
@@ -18,6 +19,7 @@ builder.Services.AddSmtpTransport();
 
 builder.Services.AddEmails();
 builder.Services.AddTemplates();
+builder.Services.AddMessages(builder.Configuration);
 builder.Services.AddDispatch();
 
 builder.Services.AddSourceRateLimiting();
@@ -39,6 +41,7 @@ if (app.Environment.IsDevelopment())
 app.MapHealthChecks("/health");
 app.MapEmails();
 app.MapTemplates();
+app.MapMessages();
 
 if (app.Configuration.GetValue("Database:MigrateOnStartup", false))
 {

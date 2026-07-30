@@ -34,6 +34,8 @@ public static class TestHost
             .AddSetting("ConnectionStrings:Postgres", () => Postgres.ConnectionString)
             .AddSetting("Database:MigrateOnStartup", () => "false")
             .AddSetting("Dispatcher:Enabled", () => "false")
+            .AddSetting("Inbox:Enabled", () => "false")
+            .AddSetting("Inbox:Schema", () => "email")
             .AddSetting("Smtp:Host", () => Smtp.Host)
             .AddSetting("Smtp:Port", () => Smtp.SmtpPort.ToString())
             .AddSetting("Smtp:Security", () => "None")

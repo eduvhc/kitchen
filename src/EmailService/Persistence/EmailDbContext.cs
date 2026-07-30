@@ -1,5 +1,6 @@
 using EmailService.Features.Emails.Domain;
 using EmailService.Features.Templates.Domain;
+using MessagingKit.Inbox.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace EmailService.Persistence;
@@ -13,5 +14,6 @@ public class EmailDbContext(DbContextOptions<EmailDbContext> options) : DbContex
     {
         builder.HasDefaultSchema("email");
         builder.ApplyConfigurationsFromAssembly(typeof(EmailDbContext).Assembly);
+        builder.AddInbox(schema: "email");
     }
 }
