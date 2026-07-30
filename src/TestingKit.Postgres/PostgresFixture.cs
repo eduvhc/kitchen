@@ -47,7 +47,7 @@ public class PostgresFixture(
         {
             DbAdapter = DbAdapter.Postgres,
             SchemasToInclude = [.. Client.SchemasToInclude],
-            TablesToIgnore = [.. Client.TablesToIgnore.Select(table => new Table(table))],
+            TablesToIgnore = ParseTables(Client.TablesToIgnore),
         };
 
         await using var connection = await CreateConnectionAsync(ct);
@@ -103,4 +103,12 @@ public class PostgresFixture(
             await ExecuteSqlAsync(script, ct);
         }
     }
+
+    private static Table[] ParseTables(IEnumerable<string> names) =>
+        [.. names.Select(name =>
+        {
+            var parts = name.Split('.', 2);
+            return parts.Length == 2 ? new Table(parts[0], parts[1]) : new Table(name);
+        })];
+
 }

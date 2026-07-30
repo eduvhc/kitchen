@@ -2,7 +2,7 @@
 
 Reusable integration-test fixtures for .NET 10, built on [Testcontainers](https://dotnet.testcontainers.org/). Start real infrastructure per test run, publish its connection details into your app's configuration, and reset state between tests.
 
-Built for net10.0 with net10.0, central package management, one package per dependency, a shared reset contract, and Postgres + SMTP fixtures.
+Built for net10.0 with central package management, one package per dependency, a shared reset contract, and Postgres + SMTP fixtures.
 
 ## Packages
 
