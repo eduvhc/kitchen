@@ -64,13 +64,14 @@ jobs:
 
   nuget-org:
     needs: pack
+    if: vars.NUGET_USER != ''
     runs-on: ubuntu-latest
     environment: nuget
     permissions:
       contents: read
       id-token: write
     steps:
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@v8
         with:
           name: packages
           path: artifacts
@@ -93,7 +94,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@v8
         with:
           name: packages
           path: artifacts
