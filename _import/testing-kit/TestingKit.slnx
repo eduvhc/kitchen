@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TestingKit.AspNetCore/TestingKit.AspNetCore.csproj" />
+    <Project Path="src/TestingKit.Azurite/TestingKit.Azurite.csproj" />
+    <Project Path="src/TestingKit.EntityFramework/TestingKit.EntityFramework.csproj" />
+    <Project Path="src/TestingKit.MSTest/TestingKit.MSTest.csproj" />
+    <Project Path="src/TestingKit.Postgres/TestingKit.Postgres.csproj" />
+    <Project Path="src/TestingKit.RabbitMq/TestingKit.RabbitMq.csproj" />
+    <Project Path="src/TestingKit.Smtp/TestingKit.Smtp.csproj" />
+    <Project Path="src/TestingKit.SqlServer/TestingKit.SqlServer.csproj" />
+    <Project Path="src/TestingKit/TestingKit.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TestingKit.Tests/TestingKit.Tests.csproj" />
+  </Folder>
+</Solution>
