@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <Description>Test doubles shared by the unit and integration suites, so they cannot drift apart.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/MessagingKit.Abstractions/MessagingKit.Abstractions.csproj" />
+    <ProjectReference Include="../../src/MessagingKit.Inbox/MessagingKit.Inbox.csproj" />
+    <ProjectReference Include="../../src/MessagingKit.Outbox/MessagingKit.Outbox.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Outbox and inbox in one registration. Reference this to give a module durable send and receive with in-process delivery by default.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MessagingKit.UnitTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- PrivateAssets="none" so the analyzer shipped in Abstractions reaches consumers of this package. -->
+    <ProjectReference Include="../MessagingKit.Abstractions/MessagingKit.Abstractions.csproj" PrivateAssets="none" />
+    <ProjectReference Include="../MessagingKit.InProcess/MessagingKit.InProcess.csproj" />
+    <ProjectReference Include="../MessagingKit.Inbox/MessagingKit.Inbox.csproj" />
+    <ProjectReference Include="../MessagingKit.Outbox/MessagingKit.Outbox.csproj" />
+  </ItemGroup>
+
+</Project>

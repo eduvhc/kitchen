@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MessagingKit/MessagingKit.csproj" />
+    <Project Path="src/MessagingKit.Abstractions/MessagingKit.Abstractions.csproj" />
+    <Project Path="src/MessagingKit.Analyzers/MessagingKit.Analyzers.csproj" />
+    <Project Path="src/MessagingKit.InProcess/MessagingKit.InProcess.csproj" />
+    <Project Path="src/MessagingKit.Inbox/MessagingKit.Inbox.csproj" />
+    <Project Path="src/MessagingKit.Outbox/MessagingKit.Outbox.csproj" />
+    <Project Path="src/MessagingKit.Testing/MessagingKit.Testing.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MessagingKit.IntegrationTests/MessagingKit.IntegrationTests.csproj" />
+    <Project Path="tests/MessagingKit.TestSupport/MessagingKit.TestSupport.csproj" />
+    <Project Path="tests/MessagingKit.UnitTests/MessagingKit.UnitTests.csproj" />
+  </Folder>
+</Solution>

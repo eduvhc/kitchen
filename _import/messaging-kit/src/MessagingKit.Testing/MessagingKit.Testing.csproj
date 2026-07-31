@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Test helpers for MessagingKit: drive the outbox and inbox to completion inside a test instead of waiting on background polling.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- PrivateAssets="none" so the analyzer shipped in Abstractions reaches consumers of this package. -->
+    <ProjectReference Include="../MessagingKit.Abstractions/MessagingKit.Abstractions.csproj" PrivateAssets="none" />
+    <ProjectReference Include="../MessagingKit.Inbox/MessagingKit.Inbox.csproj" />
+    <ProjectReference Include="../MessagingKit.Outbox/MessagingKit.Outbox.csproj" />
+  </ItemGroup>
+
+</Project>

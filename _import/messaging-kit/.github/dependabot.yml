@@ -1,0 +1,44 @@
+version: 2
+
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    groups:
+      testcontainers:
+        patterns:
+          - "Testcontainers*"
+      microsoft:
+        patterns:
+          - "Microsoft.*"
+          - "System.*"
+      test-tooling:
+        patterns:
+          - "MSTest*"
+          - "Respawn"
+      clients:
+        patterns:
+          - "Npgsql*"
+          - "Azure.*"
+          - "RabbitMQ.*"
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 4
+    groups:
+      actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: "chore(ci)"
