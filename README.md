@@ -34,12 +34,13 @@ These are what stop a family of packages collapsing into one blob:
 kitchen/
   Directory.Build.props       language version, nullable, analysis level — every project
   Directory.Packages.props    every dependency version, in one place
+  Directory.Packaging.props   NuGet metadata and versioning, shared by every kit's src
   Directory.Tests.props       rules relaxed for test projects only
   Kitchen.slnx                every project
   kits/
     testing-kit/
       README.md               ships as the NuGet readme for TestingKit.*
-      src/Directory.Build.props    package metadata, MinVer tag prefix
+      src/Directory.Build.props    imports the shared props, points at this README
       src/  tests/
     messaging-kit/
     mailing-kit/
@@ -59,11 +60,11 @@ Kits reference each other by **project**, not package. A change to MessagingKit 
 
 ## Versioning and releases
 
-Each kit versions independently, driven by [release-please](https://github.com/googleapis/release-please) in manifest mode and stamped by [MinVer](https://github.com/adamralph/minver).
+The family ships as **one version**, driven by [release-please](https://github.com/googleapis/release-please) and stamped by [MinVer](https://github.com/adamralph/minver). A conventional commit opens a release PR; merging it tags `v0.3.0` and publishes every package at `0.3.0`.
 
-- A conventional commit touching `kits/messaging-kit/**` opens a release PR for **that kit only**.
-- Merging it tags `messaging-kit-v0.3.0` and publishes only `MessagingKit.*`.
-- MinVer reads the matching tag prefix, so kits never inherit each other's version numbers.
+Independent per-kit versions were tried and do not work here. Kits reference each other by project, so MailingKit's packed dependency is whatever MessagingKit stamps at build time. With separate version lines that is a prerelease unless both kits happen to be tagged on the same commit, and NuGet refuses to let a stable package depend on a prerelease (NU5104). One version removes the coordination problem entirely.
+
+The cost is that TestingKit gets a version bump when only MailingKit changed. That is cosmetic, and honest: MailingKit cannot move without MessagingKit anyway.
 
 Publishing goes to nuget.org via trusted publishing, so there are no API keys anywhere. The job is skipped unless the `NUGET_USER` repository variable is set and a trusted-publishing policy names this repository, its `publish.yml`, and the `nuget` environment.
 
@@ -71,8 +72,8 @@ Publishing goes to nuget.org via trusted publishing, so there are no API keys an
 
 1. Name it `<Gerund>Kit`.
 2. Create `kits/<name>-kit/` with `README.md`, `src/`, `tests/`.
-3. Copy `src/Directory.Build.props` from a sibling and change `MinVerTagPrefix` to `<name>-kit-v`.
-4. Add it to `release-please-config.json`, `.release-please-manifest.json` (at `0.0.0`), and `Kitchen.slnx`.
+3. Copy `src/Directory.Build.props` from a sibling — it is two imports and the kit's README.
+4. Add it to `Kitchen.slnx`. Versioning and publishing need no changes — the whole repo ships together.
 5. Split the suites from the start: `<Kit>.UnitTests` and `<Kit>.IntegrationTests`.
 
 Nothing else — CI, publishing, and dependency versions are already shared.
