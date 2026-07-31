@@ -5,7 +5,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../../messaging-kit/src/MessagingKit/MessagingKit.csproj" />
+    <!-- PrivateAssets="none" so MessagingKit's analyzer reaches MailingKit consumers. -->
+    <ProjectReference Include="../../../messaging-kit/src/MessagingKit/MessagingKit.csproj" PrivateAssets="none" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
     <PackageReference Include="Scriban" />
   </ItemGroup>
