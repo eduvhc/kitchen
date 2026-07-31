@@ -36,8 +36,6 @@ services:
       Smtp__Port: "1025"
       Smtp__Security: None
       EmailDefaults__FromAddress: no-reply@example.com
-      ApiKeys__Keys__local__Key: dev-key
-      ApiKeys__Keys__local__IsAdmin: "true"
     ports:
       - "8080:8080"
 
