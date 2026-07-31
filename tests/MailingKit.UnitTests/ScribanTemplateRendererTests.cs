@@ -1,6 +1,6 @@
 using MailingKit.Templating;
 
-namespace MailingKit.Tests;
+namespace MailingKit.UnitTests;
 
 [TestClass]
 public class ScribanTemplateRendererTests

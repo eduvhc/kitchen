@@ -1,6 +1,6 @@
 using MailingKit.Templates;
 
-namespace MailingKit.Tests;
+namespace MailingKit.UnitTests;
 
 public sealed class FakeTemplateStore : ITemplateStore
 {

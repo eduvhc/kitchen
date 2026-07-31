@@ -1,7 +1,7 @@
 using MailingKit.Persistence;
 using Microsoft.EntityFrameworkCore;
 
-namespace MailingKit.Tests;
+namespace MailingKit.UnitTests;
 
 public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbContext(options)
 {

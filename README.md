@@ -283,7 +283,7 @@ Assert.AreEqual(EmailStatus.Sent, log.Status);
 
 ```bash
 dotnet test                                     # unit + integration
-dotnet test tests/MailingKit.Tests              # unit only, no Docker needed
+dotnet test tests/MailingKit.UnitTests              # unit only, no Docker needed
 dotnet test tests/MailingKit.IntegrationTests   # needs Docker
 ```
 

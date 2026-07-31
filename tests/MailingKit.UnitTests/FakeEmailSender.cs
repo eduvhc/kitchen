@@ -1,6 +1,6 @@
 using MailingKit.Transport;
 
-namespace MailingKit.Tests;
+namespace MailingKit.UnitTests;
 
 public sealed class FakeEmailSender : IEmailSender
 {

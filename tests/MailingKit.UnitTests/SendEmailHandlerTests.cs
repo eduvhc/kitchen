@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using MsOptions = Microsoft.Extensions.Options.Options;
 using Microsoft.Extensions.Time.Testing;
 
-namespace MailingKit.Tests;
+namespace MailingKit.UnitTests;
 
 [TestClass]
 public class SendEmailHandlerTests

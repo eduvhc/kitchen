@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="MailingKit.Tests" />
+    <InternalsVisibleTo Include="MailingKit.UnitTests" />
   </ItemGroup>
 
 </Project>
