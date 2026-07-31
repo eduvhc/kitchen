@@ -65,7 +65,7 @@ Each kit versions independently, driven by [release-please](https://github.com/g
 - Merging it tags `messaging-kit-v0.3.0` and publishes only `MessagingKit.*`.
 - MinVer reads the matching tag prefix, so kits never inherit each other's version numbers.
 
-Publishing goes to nuget.org (trusted publishing, no API keys) and GitHub Packages. The nuget.org job is skipped unless the `NUGET_USER` repository variable is set and a trusted-publishing policy exists for this repository.
+Publishing goes to nuget.org via trusted publishing, so there are no API keys anywhere. The job is skipped unless the `NUGET_USER` repository variable is set and a trusted-publishing policy names this repository, its `publish.yml`, and the `nuget` environment.
 
 ## Adding a kit
 

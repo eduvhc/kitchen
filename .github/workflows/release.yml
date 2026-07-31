@@ -40,7 +40,6 @@ jobs:
       contents: read
       id-token: write
       attestations: write
-      packages: write
     with:
       path: ${{ matrix.path }}
     secrets: inherit
