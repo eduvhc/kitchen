@@ -2,10 +2,11 @@ using MessagingKit.Inbox.Abstractions;
 using MessagingKit.Inbox.Domain;
 using MessagingKit.Outbox.Abstractions;
 using MessagingKit.Testing;
-using MessagingKit.Tests.Infrastructure;
+using MessagingKit.IntegrationTests.Infrastructure;
+using MessagingKit.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace MessagingKit.Tests;
+namespace MessagingKit.IntegrationTests;
 
 /// <summary>
 /// The read side callers reach for when asking "why didn't that message go out?".

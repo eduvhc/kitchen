@@ -1,11 +1,12 @@
 using MessagingKit.Inbox;
 using MessagingKit.Inbox.Abstractions;
 using MessagingKit.Inbox.Domain;
-using MessagingKit.Tests.Infrastructure;
+using MessagingKit.IntegrationTests.Infrastructure;
+using MessagingKit.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace MessagingKit.Tests.Inbox;
+namespace MessagingKit.IntegrationTests.Inbox;
 
 [TestClass]
 public class InboxTests : MessagingTest

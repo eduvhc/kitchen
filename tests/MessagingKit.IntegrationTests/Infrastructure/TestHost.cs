@@ -1,3 +1,4 @@
+using MessagingKit.TestSupport;
 using MessagingKit.Inbox;
 using MessagingKit.Outbox;
 using Microsoft.EntityFrameworkCore;
@@ -6,7 +7,7 @@ using Microsoft.Extensions.Time.Testing;
 using TestingKit;
 using TestingKit.Postgres;
 
-namespace MessagingKit.Tests.Infrastructure;
+namespace MessagingKit.IntegrationTests.Infrastructure;
 
 [TestClass]
 public static class TestHost

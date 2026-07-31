@@ -1,11 +1,12 @@
 using MessagingKit.Outbox.Abstractions;
 using MessagingKit.Outbox.Domain;
 using MessagingKit.Testing;
-using MessagingKit.Tests.Infrastructure;
+using MessagingKit.IntegrationTests.Infrastructure;
+using MessagingKit.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace MessagingKit.Tests;
+namespace MessagingKit.IntegrationTests;
 
 /// <summary>
 /// Exercises the full seam — outbox, transport, inbox, handler — against a real database, using its

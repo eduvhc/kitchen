@@ -9,6 +9,8 @@
     <Project Path="src/MessagingKit.Testing/MessagingKit.Testing.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/MessagingKit.Tests/MessagingKit.Tests.csproj" />
+    <Project Path="tests/MessagingKit.IntegrationTests/MessagingKit.IntegrationTests.csproj" />
+    <Project Path="tests/MessagingKit.TestSupport/MessagingKit.TestSupport.csproj" />
+    <Project Path="tests/MessagingKit.UnitTests/MessagingKit.UnitTests.csproj" />
   </Folder>
 </Solution>

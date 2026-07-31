@@ -1,4 +1,4 @@
-namespace MessagingKit.Tests;
+namespace MessagingKit.UnitTests;
 
 [TestClass]
 public class WorkSignalTests

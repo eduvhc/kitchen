@@ -279,7 +279,13 @@ It drives the same dispatcher and processor production uses, so what the test ex
 ## Tests
 
 ```bash
-dotnet test
+dotnet test                                       # both suites
+dotnet test tests/MessagingKit.UnitTests          # no Docker needed
+dotnet test tests/MessagingKit.IntegrationTests   # needs Docker
 ```
 
-Runs against a real PostgreSQL container using [TestingKit](https://github.com/eduvhc/testing-kit), with a fake in-memory transport — the framework is transport-agnostic, so the tests need no broker.
+`MessagingKit.UnitTests` covers naming, registration, signalling, startup validation, and the analyzer — no infrastructure, so it runs in about a second and parallelises.
+
+`MessagingKit.IntegrationTests` runs against a real PostgreSQL container using [TestingKit](https://github.com/eduvhc/testing-kit), with a fake in-memory transport — the framework is transport-agnostic, so the tests need no broker. It is `[assembly: DoNotParallelize]`: the suite shares one database and resets between tests.
+
+Test doubles shared by both live in `MessagingKit.TestSupport` so they cannot drift apart.

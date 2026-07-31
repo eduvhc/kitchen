@@ -1,11 +1,11 @@
 using MessagingKit.Inbox;
 using MessagingKit.Outbox;
-using MessagingKit.Tests.Infrastructure;
+using MessagingKit.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
-namespace MessagingKit.Tests;
+namespace MessagingKit.UnitTests;
 
 /// <summary>
 /// Modules register without naming the host's DbContext, and several modules in one host must not

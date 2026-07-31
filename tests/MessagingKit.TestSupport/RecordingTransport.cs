@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace MessagingKit.Tests.Infrastructure;
+namespace MessagingKit.TestSupport;
 
 public sealed class RecordingTransport : IMessageTransport
 {

@@ -1,8 +1,9 @@
 using MessagingKit.Outbox;
-using MessagingKit.Tests.Infrastructure;
+using MessagingKit.IntegrationTests.Infrastructure;
+using MessagingKit.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace MessagingKit.Tests.Outbox;
+namespace MessagingKit.IntegrationTests.Outbox;
 
 [TestClass]
 public class OutboxSignalTests : MessagingTest

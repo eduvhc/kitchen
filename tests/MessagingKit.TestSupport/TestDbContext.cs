@@ -2,7 +2,7 @@ using MessagingKit.Inbox.Persistence;
 using MessagingKit.Outbox.Persistence;
 using Microsoft.EntityFrameworkCore;
 
-namespace MessagingKit.Tests.Infrastructure;
+namespace MessagingKit.TestSupport;
 
 public class TestDbContext(DbContextOptions<TestDbContext> options) : DbContext(options)
 {

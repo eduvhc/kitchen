@@ -1,9 +1,9 @@
-using MessagingKit.Tests.Infrastructure;
+using MessagingKit.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
-namespace MessagingKit.Tests;
+namespace MessagingKit.UnitTests;
 
 /// <summary>
 /// Validation runs before any connection is opened, so these build a provider without a database.

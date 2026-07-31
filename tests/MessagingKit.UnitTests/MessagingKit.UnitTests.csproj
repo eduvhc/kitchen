@@ -6,12 +6,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
-    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="MSTest" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
-    <PackageReference Include="TestingKit" />
-    <PackageReference Include="TestingKit.MSTest" />
-    <PackageReference Include="TestingKit.Postgres" />
   </ItemGroup>
 
   <ItemGroup>
@@ -20,7 +16,7 @@
     <ProjectReference Include="../../src/MessagingKit.InProcess/MessagingKit.InProcess.csproj" />
     <ProjectReference Include="../../src/MessagingKit.Inbox/MessagingKit.Inbox.csproj" />
     <ProjectReference Include="../../src/MessagingKit.Outbox/MessagingKit.Outbox.csproj" />
-    <ProjectReference Include="../../src/MessagingKit.Testing/MessagingKit.Testing.csproj" />
+    <ProjectReference Include="../MessagingKit.TestSupport/MessagingKit.TestSupport.csproj" />
 
     <!-- Analyzers do not flow through ProjectReference, so consume it directly to exercise it here. -->
     <ProjectReference Include="../../src/MessagingKit.Analyzers/MessagingKit.Analyzers.csproj"

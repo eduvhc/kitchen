@@ -1,8 +1,9 @@
+using MessagingKit.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using TestingKit;
 using TestingKit.MSTest;
 
-namespace MessagingKit.Tests.Infrastructure;
+namespace MessagingKit.IntegrationTests.Infrastructure;
 
 public abstract class MessagingTest : IntegrationTest
 {

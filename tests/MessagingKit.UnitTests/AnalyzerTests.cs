@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
 
-namespace MessagingKit.Tests;
+namespace MessagingKit.UnitTests;
 
 /// <summary>
 /// Compiles snippets in memory and runs the analyzer over them, so the rules are covered without

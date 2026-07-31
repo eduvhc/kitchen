@@ -1,10 +1,11 @@
 using MessagingKit.Outbox;
 using MessagingKit.Outbox.Domain;
-using MessagingKit.Tests.Infrastructure;
+using MessagingKit.IntegrationTests.Infrastructure;
+using MessagingKit.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace MessagingKit.Tests.Outbox;
+namespace MessagingKit.IntegrationTests.Outbox;
 
 [TestClass]
 public class OutboxDispatcherTests : MessagingTest

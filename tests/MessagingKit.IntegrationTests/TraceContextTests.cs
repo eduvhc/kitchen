@@ -1,11 +1,12 @@
 using System.Diagnostics;
 using MessagingKit.Outbox.Abstractions;
 using MessagingKit.Outbox.Domain;
-using MessagingKit.Tests.Infrastructure;
+using MessagingKit.IntegrationTests.Infrastructure;
+using MessagingKit.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace MessagingKit.Tests;
+namespace MessagingKit.IntegrationTests;
 
 [TestClass]
 public class TraceContextTests : MessagingTest
