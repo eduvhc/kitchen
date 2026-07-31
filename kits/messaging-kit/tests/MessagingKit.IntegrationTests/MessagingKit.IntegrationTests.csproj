@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <PackageReference Include="MSTest" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <ProjectReference Include="../../../testing-kit/src/TestingKit/TestingKit.csproj" />
+    <ProjectReference Include="../../../testing-kit/src/TestingKit.MSTest/TestingKit.MSTest.csproj" />
+    <ProjectReference Include="../../../testing-kit/src/TestingKit.Postgres/TestingKit.Postgres.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/MessagingKit/MessagingKit.csproj" />
+    <ProjectReference Include="../../src/MessagingKit.Abstractions/MessagingKit.Abstractions.csproj" />
+    <ProjectReference Include="../../src/MessagingKit.InProcess/MessagingKit.InProcess.csproj" />
+    <ProjectReference Include="../../src/MessagingKit.Inbox/MessagingKit.Inbox.csproj" />
+    <ProjectReference Include="../../src/MessagingKit.Outbox/MessagingKit.Outbox.csproj" />
+    <ProjectReference Include="../../src/MessagingKit.Testing/MessagingKit.Testing.csproj" />
+    <ProjectReference Include="../MessagingKit.TestSupport/MessagingKit.TestSupport.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+  </ItemGroup>
+
+</Project>

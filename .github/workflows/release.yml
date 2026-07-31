@@ -1,0 +1,46 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      # Paths whose release PR was merged this run, e.g. ["kits/messaging-kit"].
+      paths: ${{ steps.release.outputs.paths_released }}
+    steps:
+      - uses: googleapis/release-please-action@v5
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    needs: release-please
+    if: needs.release-please.outputs.paths != '[]' && needs.release-please.outputs.paths != ''
+    strategy:
+      # One kit failing to publish should not stop the others.
+      fail-fast: false
+      matrix:
+        path: ${{ fromJson(needs.release-please.outputs.paths) }}
+    uses: ./.github/workflows/publish.yml
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      packages: write
+    with:
+      path: ${{ matrix.path }}
+    secrets: inherit

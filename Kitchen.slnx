@@ -1,0 +1,30 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="kits/mailing-kit/src/MailingKit.Smtp/MailingKit.Smtp.csproj" />
+    <Project Path="kits/mailing-kit/src/MailingKit/MailingKit.csproj" />
+    <Project Path="kits/messaging-kit/src/MessagingKit.Abstractions/MessagingKit.Abstractions.csproj" />
+    <Project Path="kits/messaging-kit/src/MessagingKit.Analyzers/MessagingKit.Analyzers.csproj" />
+    <Project Path="kits/messaging-kit/src/MessagingKit.InProcess/MessagingKit.InProcess.csproj" />
+    <Project Path="kits/messaging-kit/src/MessagingKit.Inbox/MessagingKit.Inbox.csproj" />
+    <Project Path="kits/messaging-kit/src/MessagingKit.Outbox/MessagingKit.Outbox.csproj" />
+    <Project Path="kits/messaging-kit/src/MessagingKit.Testing/MessagingKit.Testing.csproj" />
+    <Project Path="kits/messaging-kit/src/MessagingKit/MessagingKit.csproj" />
+    <Project Path="kits/testing-kit/src/TestingKit.AspNetCore/TestingKit.AspNetCore.csproj" />
+    <Project Path="kits/testing-kit/src/TestingKit.Azurite/TestingKit.Azurite.csproj" />
+    <Project Path="kits/testing-kit/src/TestingKit.EntityFramework/TestingKit.EntityFramework.csproj" />
+    <Project Path="kits/testing-kit/src/TestingKit.MSTest/TestingKit.MSTest.csproj" />
+    <Project Path="kits/testing-kit/src/TestingKit.Postgres/TestingKit.Postgres.csproj" />
+    <Project Path="kits/testing-kit/src/TestingKit.RabbitMq/TestingKit.RabbitMq.csproj" />
+    <Project Path="kits/testing-kit/src/TestingKit.Smtp/TestingKit.Smtp.csproj" />
+    <Project Path="kits/testing-kit/src/TestingKit.SqlServer/TestingKit.SqlServer.csproj" />
+    <Project Path="kits/testing-kit/src/TestingKit/TestingKit.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="kits/mailing-kit/tests/MailingKit.IntegrationTests/MailingKit.IntegrationTests.csproj" />
+    <Project Path="kits/mailing-kit/tests/MailingKit.UnitTests/MailingKit.UnitTests.csproj" />
+    <Project Path="kits/messaging-kit/tests/MessagingKit.IntegrationTests/MessagingKit.IntegrationTests.csproj" />
+    <Project Path="kits/messaging-kit/tests/MessagingKit.TestSupport/MessagingKit.TestSupport.csproj" />
+    <Project Path="kits/messaging-kit/tests/MessagingKit.UnitTests/MessagingKit.UnitTests.csproj" />
+    <Project Path="kits/testing-kit/tests/TestingKit.IntegrationTests/TestingKit.IntegrationTests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "simple",
+  "separate-pull-requests": true,
+  "include-component-in-tag": true,
+  "include-v-in-tag": true,
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": false,
+  "changelog-sections": [
+    { "type": "feat", "section": "Features" },
+    { "type": "fix", "section": "Bug Fixes" },
+    { "type": "perf", "section": "Performance" },
+    { "type": "deps", "section": "Dependencies" },
+    { "type": "docs", "section": "Documentation", "hidden": true },
+    { "type": "chore", "section": "Chores", "hidden": true },
+    { "type": "test", "section": "Tests", "hidden": true }
+  ],
+  "packages": {
+    "kits/testing-kit": { "component": "testing-kit" },
+    "kits/messaging-kit": { "component": "messaging-kit" },
+    "kits/mailing-kit": { "component": "mailing-kit" }
+  }
+}

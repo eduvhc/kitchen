@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../messaging-kit/src/MessagingKit.Testing/MessagingKit.Testing.csproj" />
+    <PackageReference Include="MSTest" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <ProjectReference Include="../../../testing-kit/src/TestingKit/TestingKit.csproj" />
+    <ProjectReference Include="../../../testing-kit/src/TestingKit.MSTest/TestingKit.MSTest.csproj" />
+    <ProjectReference Include="../../../testing-kit/src/TestingKit.Postgres/TestingKit.Postgres.csproj" />
+    <ProjectReference Include="../../../testing-kit/src/TestingKit.Smtp/TestingKit.Smtp.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/MailingKit/MailingKit.csproj" />
+    <ProjectReference Include="../../src/MailingKit.Smtp/MailingKit.Smtp.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,13 @@
+<Project>
+
+  <!--
+    Shared by every kit's tests. Rules that make sense for shipping code but not for test code:
+    underscored names are the readable convention here, literal arrays are clearer than fields,
+    and ConfigureAwait adds noise in a test host.
+  -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <NoWarn>$(NoWarn);CA1707;CA1861;CA2007</NoWarn>
+  </PropertyGroup>
+
+</Project>

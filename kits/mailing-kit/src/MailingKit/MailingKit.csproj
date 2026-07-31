@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Email as a module: handles MessagingKit's send-email message, renders templates, and records what was sent.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../messaging-kit/src/MessagingKit/MessagingKit.csproj" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Scriban" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MailingKit.UnitTests" />
+  </ItemGroup>
+
+</Project>
