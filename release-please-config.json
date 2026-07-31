@@ -41,5 +41,6 @@
     ".": {
       "package-name": "kitchen"
     }
-  }
+  },
+  "include-component-in-tag": false
 }
