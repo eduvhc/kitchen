@@ -1,315 +1,301 @@
-# EmailService
+# MailingKit
 
-A generic email microservice: one HTTP call queues an email, a background dispatcher delivers it, and every attempt is recorded. Built on .NET 10 minimal APIs with a Postgres-backed durable queue, MailKit SMTP transport, and Scriban templates stored in the database.
+Email as a module for .NET 10, on EF Core and PostgreSQL.
 
-No broker, no Redis, no cron. The queue is a Postgres table claimed with `SELECT ... FOR UPDATE SKIP LOCKED`, so scaling out means running more replicas and nothing else.
+A product references it and gains the ability to send email durably. There is no queue, no dispatcher, and no service to deploy — [MessagingKit](https://github.com/eduvhc/messaging-kit) owns durability, retries, and dead-lettering, and MailingKit is the handler on the other end of it.
 
-| | |
+```csharp
+db.Invoices.Add(invoice);
+outbox.Add(new SendEmail { To = [customer.Email], Template = "invoice" });
+await db.SaveChangesAsync();    // invoice and email commit together, or neither does
+```
+
+The sending module knows nothing about SMTP, templates, or retries. It writes a row in its own transaction and moves on.
+
+## Why there is no queue here
+
+An earlier version of this was a service with its own `emails` table, `SKIP LOCKED` dispatcher, and retry ladder. All of it duplicated what MessagingKit's outbox already does, field for field, so it was deleted.
+
+What is left is the part that is actually about email.
+
+| Concern | Owner |
 | --- | --- |
-| Runtime | .NET 10, ASP.NET Core minimal APIs |
-| Storage | Postgres 17 (EF Core 10, `email` schema) |
-| Transport | SMTP via MailKit — swap in Resend/SES by implementing one interface |
-| Templates | Scriban, stored in Postgres, editable at runtime |
-| Auth | None — the service trusts its network; see [Deployment](#deployment-notes) |
-| Tests | MSTest — unit with fakes, integration on real containers |
+| Not losing the message | MessagingKit outbox |
+| Not sending it twice | MessagingKit inbox |
+| Retry, backoff, dead-lettering | MessagingKit inbox |
+| Scheduling (`sendAt`) | MessagingKit outbox |
+| Templates, validation, SMTP | MailingKit |
+| A record of what was sent | MailingKit send log |
+
+## Packages
+
+| Package | Contents |
+| --- | --- |
+| `MailingKit` | `SendEmail`, the handler, templates, send log |
+| `MailingKit.Smtp` | `SmtpEmailSender` on MailKit |
+
+```bash
+dotnet add package MessagingKit
+dotnet add package MailingKit
+dotnet add package MailingKit.Smtp
+```
+
+`MailingKit.Smtp` is separate so a host on Resend or SES never pulls in MailKit.
 
 ## Quick start
 
-```bash
-docker compose up -d postgres mailpit
-dotnet run --project src/EmailService
-```
+Everything below is complete — copy it, point the connection string at your database, and it runs.
 
-Postgres listens on `5433`, Mailpit on `1026` (SMTP) and `8026` (web UI), chosen to stay clear of other local stacks. Development runs apply migrations at startup.
+### 1. Your `DbContext`
 
-```bash
-curl -X POST localhost:5294/v1/emails \
-  -H 'Content-Type: application/json' \
-  -d '{"to":["someone@example.com"],"subject":"Hello","html":"<p>Hello</p>"}'
-```
-
-The mail lands in Mailpit at http://localhost:8026. To run everything in containers instead: `docker compose up --build`.
-
-## How it works
-
-`POST /v1/emails` validates the request, renders the template if one is named, and writes a single row to `email.emails` with `status = Queued`. The response returns as soon as that row commits — the caller never waits on SMTP.
-
-`EmailDispatcher` polls the same table. Each tick claims a batch with `FOR UPDATE SKIP LOCKED`, flips those rows to `Sending` with a lock expiry, and sends them in parallel:
-
-- **Success** → `Sent`, with the provider message id recorded.
-- **Transient failure** (connection refused, timeout, 4xx) → back to `Queued`, rescheduled with exponential backoff (30s doubling, capped at an hour).
-- **Permanent failure** (5xx reply, malformed address) or attempts exhausted → `Dead`, no further tries.
-
-A process that dies mid-send leaves rows stuck in `Sending`; the next dispatcher reclaims them once `locked_until` passes. `SKIP LOCKED` guarantees a row is claimed by exactly one worker, so every replica can run the dispatcher safely. Set `Dispatcher:Enabled=false` to run an API-only replica.
-
-## Layout
-
-One project, organised in vertical slices: a use case lives in one folder with its request, handler, validator, and endpoint side by side.
-
-```
-src/EmailService/
-  Program.cs                       the only file in the project root
-
-  Features/
-    Emails/
-      Abstractions/                IEmailQueue, EmailQueryFilter
-      Domain/                      EmailMessage, EmailAttachment, EmailStatus
-      Contracts/                   EmailResponse
-      EmailQueue.cs                Postgres implementation (SKIP LOCKED claim)
-      EmailsFeature.cs             AddEmails() + MapEmails()
-      SendEmail/                   request, validator, handler, result, endpoint
-      GetEmail/ ListEmails/ CancelEmail/
-    Templates/
-      Abstractions/                ITemplateStore
-      Domain/                      EmailTemplate
-      Contracts/                   TemplateResponse
-      TemplateStore.cs
-      TemplatesFeature.cs
-      UpsertTemplate/ GetTemplate/ ListTemplates/ DeleteTemplate/ PreviewTemplate/
-    Dispatch/
-      EmailDispatcher.cs           BackgroundService: claim, send, retry
-      DispatchFeature.cs
-    Messages/
-      SendEmailMessageHandler.cs   inbox handler: message to queued email
-      MessagesFeature.cs
-      ReceiveMessage/ GetMessage/
-
-  Transport/
-    Abstractions/                  IEmailSender, SendResult
-    Smtp/SmtpEmailSender.cs
-    TransportExtensions.cs
-  Templating/
-    Abstractions/                  ITemplateRenderer, TemplateRenderException
-    ScribanTemplateRenderer.cs
-    TemplatingExtensions.cs
-  Persistence/                     EmailDbContext, Configurations/, Migrations/
-  RateLimiting/                    per-source fixed-window limiter
-  Options/                         Smtp, Dispatcher, EmailDefaults, RateLimit
-  Common/                          IEndpoint, MapEndpoint<T>(), ValidationException
-
-tests/EmailService.Tests/               unit tests, mirrors the slice folders
-tests/EmailService.IntegrationTests/    container-backed tests
-  Infrastructure/                       TestHost, factory, ApiTest base
-  Features/                             mirrors the source slices
-```
-
-Every abstraction lives in an `Abstractions/` folder directly beside the implementation that satisfies it: `IEmailQueue` sits next to `EmailQueue`, `IEmailSender` next to `Smtp/SmtpEmailSender`. Namespaces follow folders, and each file holds one type.
-
-`Domain/` holds entities EF maps to tables. `Contracts/` holds what crosses the HTTP boundary — the two never share a type, so a column rename cannot silently reshape the API. Per-use-case folders keep everything a slice needs together.
-
-Each feature owns its registration: `Program.cs` calls `AddEmails()`, `AddTemplates()`, `AddDispatch()`, then `MapEmails()`, `MapTemplates()`. Endpoints implement `IEndpoint` (`static abstract Map`), registered explicitly with `group.MapEndpoint<SendEmailEndpoint>()` — no reflection scanning.
-
-Adding a use case: create `Features/<Feature>/<UseCase>/`, drop in the endpoint (plus handler and validator when it earns them), add one `MapEndpoint<T>()` line to the feature file. Nothing else moves.
-
-## API
-
-The API is unauthenticated by design. Authentication and authorization are platform concerns — a gateway, service mesh, or network boundary decides who may call this service, and the service itself only sends email. **It must never be routable from outside that boundary.** See [Deployment](#deployment-notes).
-
-Send requests may carry an `X-Source` header naming the calling system. It is recorded on the email as `source` for filtering and auditing, and is the rate-limit partition key. It is a label, not a credential — nothing is trusted or granted based on it.
-
-| Method | Route | Purpose |
-| --- | --- | --- |
-| `POST` | `/v1/emails` | Queue an email |
-| `GET` | `/v1/emails/{id}` | Read one email and its delivery state |
-| `GET` | `/v1/emails?status=&recipient=&template=&source=&limit=&offset=` | List emails |
-| `POST` | `/v1/emails/{id}/cancel` | Cancel a still-queued email |
-| `GET` | `/v1/templates` | List templates |
-| `GET` | `/v1/templates/{key}` | Read a template |
-| `PUT` | `/v1/templates/{key}` | Create or replace a template |
-| `DELETE` | `/v1/templates/{key}` | Delete a template |
-| `POST` | `/v1/templates/{key}/preview` | Render a template against a model without sending |
-| `POST` | `/v1/messages` | Accept a message envelope into the inbox |
-| `GET` | `/v1/messages/{id}` | Read the processing state of a received message |
-| `GET` | `/health` | Liveness plus a Postgres check |
-
-OpenAPI is served at `/openapi/v1.json` in Development.
-
-### Sending
-
-```jsonc
-{
-  "to": ["someone@example.com"],       // required; cc and bcc also accepted
-  "subject": "Hello",                   // required unless a template supplies it
-  "html": "<p>Hello</p>",               // html or text (or both) required
-  "text": "Hello",
-  "from": "billing@example.com",        // falls back to template, then config
-  "fromName": "Billing",
-  "replyTo": "support@example.com",
-  "headers": { "X-Campaign": "welcome" },
-  "attachments": [
-    { "fileName": "invoice.pdf", "contentType": "application/pdf", "content": "<base64>" }
-  ],
-  "sendAt": "2026-08-01T09:00:00Z",     // schedule for later
-  "maxAttempts": 5,
-  "idempotencyKey": "order-42"
-}
-```
-
-Attachments carrying a `contentId` are embedded as inline resources, referenced from the HTML as `cid:<contentId>`.
-
-Reusing an `idempotencyKey` returns `200` with the original email instead of queueing a second one — safe to retry a failed HTTP call without double-sending.
-
-### Templates
-
-```bash
-curl -X PUT localhost:5294/v1/templates/welcome \
-  -H 'Content-Type: application/json' \
-  -d '{"subject":"Welcome {{ name }}","html":"<p>Hi {{ name }}</p>"}'
-
-curl -X POST localhost:5294/v1/emails \
-  -H 'Content-Type: application/json' -H 'X-Source: billing' \
-  -d '{"to":["someone@example.com"],"template":"welcome","model":{"name":"Ada"}}'
-```
-
-Templates are [Scriban](https://github.com/scriban/scriban). A malformed template is rejected at `PUT` time with `422`, so a broken edit cannot reach a send. `POST /v1/templates/{key}/preview` renders against a model without queueing anything.
-
-## Inbox
-
-Callers that need to send email as part of their own transaction should not call `POST /v1/emails` directly — a crash between their commit and the call loses the email, and a retry after a timeout sends it twice. They write to a transactional outbox instead and deliver here, which is what `/v1/messages` is for.
-
-```
-billing txn:      invoice row + outbox row     one commit, both or neither
-billing job:      claim row, deliver           retries until accepted
-POST /v1/messages: store by message id         duplicate? 200, nothing queued
-inbox processor:  handle, queue the email      retry with backoff, then dead
-email dispatcher: SMTP send                    the existing pipeline
-```
-
-The envelope is [MessagingKit](https://github.com/eduvhc/messaging-kit)'s shape:
-
-```bash
-curl -X POST localhost:5294/v1/messages \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "id": "019fb353-c9a8-78ae-9d1d-00a86703ef5e",
-    "type": "send-email",
-    "payload": "{\"to\":[\"someone@example.com\"],\"subject\":\"Hi\",\"html\":\"<p>Hi</p>\"}",
-    "createdAt": "2026-07-30T09:00:00Z"
-  }'
-```
-
-`202` means stored; `200` means the id was already seen and nothing was queued a second time. The payload is the same JSON `POST /v1/emails` accepts, so templates, attachments, and scheduling all work unchanged.
-
-Deduplication is the message id, which is the inbox table's primary key — a redelivery cannot create a second row. When the handler queues the email it also passes that id as the `idempotencyKey`, so even a message processed twice by two racing workers converges on one email.
-
-Emails arriving this way are recorded with `source: inbox`.
-
-## Rate limiting
-
-Every `/v1` route is rate limited with a fixed window, partitioned by `X-Source`. Requests without the header fall back to a per-remote-IP partition. Exceeding the limit returns `429` with a `Retry-After` header and a problem document; `/health` is never limited.
-
-```jsonc
-"RateLimit": {
-  "Enabled": true,
-  "PermitLimit": 120,       // per window, per source
-  "WindowSeconds": 60,
-  "QueueLimit": 0,          // 0 rejects immediately instead of waiting
-  "Sources": {
-    "reports": { "PermitLimit": 20 },              // per-source overrides
-    "billing": { "PermitLimit": 600, "WindowSeconds": 60 }
-  }
-}
-```
-
-Two caveats worth knowing. The limiter is **per instance** — with N replicas the effective ceiling is N × `PermitLimit`, so size it accordingly or move the limit to the gateway if you need a global one. And because partitions are created per distinct header value, a caller sending random `X-Source` values would grow the partition table; have the gateway set or strip that header rather than letting arbitrary clients choose it.
-
-## Configuration
-
-Bind through appsettings or environment variables (`Section__Key`).
-
-| Key | Default | Notes |
-| --- | --- | --- |
-| `ConnectionStrings:Postgres` | localhost:5433 | |
-| `Database:MigrateOnStartup` | `false` | `true` in Development |
-| `Smtp:Host` / `Smtp:Port` | `localhost:1026` | |
-| `Smtp:Security` | `Auto` | `None`, `Auto`, `SslOnConnect`, `StartTls` |
-| `Smtp:Username` / `Smtp:Password` | none | Supply via secrets, not appsettings |
-| `Smtp:AcceptAllCertificates` | `false` | Disables TLS certificate validation; local development only |
-| `EmailDefaults:FromAddress` | `no-reply@example.com` | Used when neither request nor template names a sender |
-| `EmailDefaults:MaxAttempts` | `5` | |
-| `EmailDefaults:MaxRecipients` | `50` | Across to + cc + bcc |
-| `EmailDefaults:MaxAttachmentBytes` | `10485760` | Total decoded size |
-| `EmailDefaults:AllowedRecipientDomains` | empty | Empty allows every domain; set it in staging to avoid mailing real users |
-| `Dispatcher:Enabled` | `true` | `false` for an API-only replica |
-| `Dispatcher:BatchSize` / `Concurrency` | `20` / `4` | |
-| `Dispatcher:PollIntervalSeconds` | `5` | Skipped while batches come back full |
-| `Dispatcher:LockDurationSeconds` | `120` | Must exceed the worst-case send time |
-| `Dispatcher:BaseRetryDelaySeconds` | `30` | Doubles per attempt |
-| `Dispatcher:MaxRetryDelaySeconds` | `3600` | |
-| `RateLimit:Enabled` | `true` | `false` disables limiting entirely |
-| `RateLimit:PermitLimit` / `WindowSeconds` | `120` / `60` | Per source, per instance |
-| `RateLimit:QueueLimit` | `0` | Requests queued once the limit is hit; `0` rejects immediately |
-| `RateLimit:Sources:<source>:*` | none | Per-source overrides of the three settings above |
-| `Inbox:Enabled` | `true` | `false` accepts messages but runs no processor |
-| `Inbox:BatchSize` / `Concurrency` | `50` / `4` | |
-| `Inbox:MaxAttempts` | `10` | Then the message is marked `Dead` |
-| `Inbox:BaseRetryDelaySeconds` / `MaxRetryDelaySeconds` | `10` / `3600` | Doubles per attempt |
-
-One setting exists only for local development and must stay off elsewhere: `Smtp:AcceptAllCertificates=true` disables TLS certificate validation. SMTP passwords belong in a secret store or environment variables, never in appsettings.
-
-## Migrations
-
-```bash
-dotnet dotnet-ef migrations add <Name> -p src/EmailService -s src/EmailService -o Persistence/Migrations
-dotnet dotnet-ef database update -p src/EmailService -s src/EmailService
-```
-
-Production deployments should run `database update` as a release step and leave `Database:MigrateOnStartup=false`.
-
-## Tests
-
-```bash
-dotnet test                                      # unit + integration
-dotnet test tests/EmailService.Tests             # unit only, no Docker needed
-dotnet test tests/EmailService.IntegrationTests  # needs Docker
-```
-
-`EmailService.Tests` uses in-memory fakes: validation, template resolution, idempotency, retry backoff. Instant, no infrastructure.
-
-`EmailService.IntegrationTests` runs against real infrastructure using [TestingKit](https://github.com/eduvhc/testing-kit) fixtures — a Postgres container and a Mailpit SMTP container started once per assembly, with Respawn truncating the `email` schema between tests. It covers what fakes cannot: the `SKIP LOCKED` claim query and concurrent claimers, lock expiry and reclaim, retry and dead transitions, the `text[]`/`jsonb` mappings, the unique idempotency index, migrations, and end-to-end delivery asserted against the Mailpit inbox.
-
-TestingKit comes from nuget.org and needs no credentials. MessagingKit is currently published only to GitHub Packages, so restore needs a token for that feed; `nuget.config` reads it from the environment and nothing secret is committed:
-
-```bash
-export GITHUB_PACKAGES_USER=<your-github-user>
-export GITHUB_PACKAGES_TOKEN=<PAT with read:packages>   # or: $(gh auth token)
-dotnet restore
-```
-
-Package source mapping pins `MessagingKit.*` to that feed and everything else to nuget.org. Once MessagingKit is on nuget.org the extra source can go away.
-
-## Adding an email provider
-
-Implement `IEmailSender` in `Transport/<Provider>/` and swap the registration in `Transport/TransportExtensions.cs`:
+Both kits map their tables into the context you already own, so `dotnet ef migrations add` picks them up in your own migration history. Neither package ships migrations.
 
 ```csharp
-public class ResendEmailSender : IEmailSender
+using MailingKit.Persistence;
+using MessagingKit;
+using Microsoft.EntityFrameworkCore;
+
+public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
-    public async Task<SendResult> SendAsync(EmailMessage message, CancellationToken ct = default)
+    public DbSet<Invoice> Invoices => Set<Invoice>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // ...
-        return SendResult.Ok(providerMessageId);
+        modelBuilder.AddMessaging();        // messaging.outbox, messaging.inbox
+        modelBuilder.AddMailing();          // email.email_log
+        modelBuilder.AddEmailTemplates();   // email.templates — only with database templates
     }
 }
 ```
 
-Return `SendResult.Permanent` for failures retrying cannot fix — the dispatcher sends those straight to `Dead` instead of burning attempts. The queue, dispatcher, and API are untouched.
+### 2. `Program.cs`
 
-## Deployment notes
+```csharp
+using MailingKit;
+using MailingKit.Smtp;
+using MessagingKit;
+using Microsoft.EntityFrameworkCore;
 
-**The service has no authentication of its own, so the deployment must supply it.** Anything that can reach the port can send mail signed by your domain's SPF/DKIM records, and can read every stored email — recipients, subjects, bodies, and template models — through `GET /v1/emails`. Before deploying, make sure one of these is true:
+var builder = WebApplication.CreateBuilder(args);
 
-- a service mesh enforces mTLS and an authorization policy naming the services allowed to call this one, or
-- an authenticating gateway is the only route in, and the service accepts traffic from it alone, or
-- the service is bound to a private network with no ingress and no public load balancer.
+builder.Services.AddDbContext<AppDbContext>(o =>
+    o.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
 
-"Nothing has exposed it yet" is not one of those. Verify with an unauthenticated request from outside the intended boundary; it should not connect.
+// Outbox, inbox, and in-process delivery between modules in this host.
+builder.Services.AddMessaging<AppDbContext>(builder.Configuration);
 
-- The image runs as a non-root user and listens on `8080`.
-- `/health` covers liveness and Postgres reachability; point both probes at it.
-- Every replica runs a dispatcher by default. That is safe, but for predictable throughput run a fixed number of dispatcher replicas and set `Dispatcher:Enabled=false` on the rest.
-- `Dispatcher:LockDurationSeconds` must exceed the slowest realistic send, or a second worker will reclaim a row still in flight and the recipient gets the mail twice.
+// The send-email handler, templates, and the send log.
+builder.Services.AddMailing<AppDbContext>(o =>
+{
+    o.Templates.UseFiles("EmailTemplates");
+    o.Defaults.FromAddress = "no-reply@example.com";
+    o.Defaults.FromName = "Example";
+});
 
-## Package notes
+builder.Services.AddSmtpTransport(o =>
+{
+    o.Host = builder.Configuration["Smtp:Host"]!;
+    o.Port = builder.Configuration.GetValue("Smtp:Port", 587);
+    o.Username = builder.Configuration["Smtp:Username"];
+    o.Password = builder.Configuration["Smtp:Password"];
+});
 
-`Microsoft.OpenApi` is pinned to `2.11.0`. The 3.x line breaks the ASP.NET Core 10 OpenAPI source generator (`IOpenApiMediaType.Example` became read-only), and the version resolved transitively by default (`2.0.0`) carries advisory GHSA-v5pm-xwqc-g5wc.
+var app = builder.Build();
+app.Run();
+```
+
+`AddMailing` registers the handler through `AddMessageHandler<SendEmail, …>`, so MessagingKit's startup validation covers it: a host that wires the outbox but forgets `AddMailing` fails at boot rather than dead-lettering a message at 3am.
+
+### 3. Create the tables
+
+```bash
+dotnet ef migrations add AddMessagingAndMailing
+dotnet ef database update
+```
+
+### 4. Send
+
+Inject `IOutbox` wherever the email is a consequence of work you are already doing:
+
+```csharp
+using MailingKit;
+using MessagingKit.Outbox.Abstractions;
+
+public sealed class InvoiceService(AppDbContext db, IOutbox outbox)
+{
+    public async Task IssueAsync(Invoice invoice, string customerEmail, CancellationToken ct)
+    {
+        db.Invoices.Add(invoice);
+
+        outbox.Add(new SendEmail
+        {
+            To = [customerEmail],
+            Template = "invoice",
+            Model = new Dictionary<string, object?>
+            {
+                ["reference"] = invoice.Reference,
+                ["total"] = invoice.Total,
+            },
+            Source = "billing",
+        });
+
+        await db.SaveChangesAsync(ct);
+    }
+}
+```
+
+`outbox.Add` stages a row; your `SaveChangesAsync` commits it. If the transaction rolls back, the email never existed. Committing wakes the dispatcher, so delivery does not wait out a poll interval.
+
+## The message
+
+```csharp
+new SendEmail
+{
+    To = ["someone@example.com"],       // required; Cc and Bcc also accepted
+    Subject = "Hello",                   // required unless a template supplies it
+    Html = "<p>Hello</p>",               // Html or Text (or both) required
+    Text = "Hello",
+    From = "billing@example.com",        // falls back to the template, then to Defaults
+    FromName = "Billing",
+    ReplyTo = "support@example.com",
+    Template = "welcome",                // renders Subject/Html/Text when set
+    Model = new() { ["name"] = "Ada" },
+    Headers = new() { ["X-Campaign"] = "welcome" },
+    Attachments = [new Attachment
+    {
+        FileName = "invoice.pdf",
+        ContentType = "application/pdf",
+        Content = Convert.ToBase64String(bytes),
+    }],
+    Source = "billing",                  // free-text label on the send log
+}
+```
+
+Anything explicitly set wins over the template, which wins over `Defaults`.
+
+**No idempotency key, no `maxAttempts`, no `sendAt` on this type** — they would duplicate MessagingKit. The message id deduplicates, the inbox owns the retry ladder, and scheduling is `outbox.Add(message, sendAt: whenever)`.
+
+Attachments travel inside the message payload, so keep them small; anything large belongs in object storage with a link.
+
+## Templates
+
+Both stores are [Scriban](https://github.com/scriban/scriban). Pick one at registration.
+
+**Files** — versioned with your code, reviewed in pull requests, no admin surface:
+
+```csharp
+o.Templates.UseFiles("EmailTemplates");
+```
+
+```
+EmailTemplates/
+  welcome.subject.scriban     required
+  welcome.html.scriban        optional
+  welcome.text.scriban        optional
+```
+
+**Database** — editable at runtime by people who are not engineers:
+
+```csharp
+o.Templates.UseDatabase();
+```
+
+Then call `modelBuilder.AddEmailTemplates()` and inject `IWritableTemplateStore` to build your own editing screen. Skip that call with file templates, or you inherit a table nothing reads.
+
+Omit both and a message naming a template fails with an explanatory error rather than sending something blank.
+
+## Another provider
+
+Implement one method:
+
+```csharp
+using MailingKit.Transport;
+
+public sealed class ResendEmailSender(HttpClient http) : IEmailSender
+{
+    public async Task<SendResult> SendAsync(OutgoingEmail email, CancellationToken ct = default)
+    {
+        var response = await http.PostAsJsonAsync("/emails", Map(email), ct);
+
+        if (response.IsSuccessStatusCode)
+        {
+            return SendResult.Ok(await ReadProviderIdAsync(response, ct));
+        }
+
+        return (int)response.StatusCode >= 500
+            ? SendResult.Transient($"{(int)response.StatusCode} from provider")
+            : SendResult.Permanent(await response.Content.ReadAsStringAsync(ct));
+    }
+}
+```
+
+```csharp
+builder.Services.AddScoped<IEmailSender, ResendEmailSender>();   // instead of AddSmtpTransport()
+```
+
+`OutgoingEmail` arrives fully resolved — templates rendered, recipients validated — so a transport only has to move bytes. Return `Permanent` for what retrying cannot fix; the inbox dead-letters those instead of burning ten attempts on a malformed address.
+
+## The send log
+
+`email.email_log` records one row per message: recipients, subject, template, outcome, the provider's message id, and the error if there was one. It is **not** a queue — no status machine, no locking, no `Queued` state. Anything still in flight lives in `messaging.inbox`.
+
+```sql
+select to_addresses, subject, status, provider_message_id, last_error
+from email.email_log
+where created_at > now() - interval '1 day'
+order by created_at desc;
+```
+
+Keyed unique on `message_id`, so a redelivered message updates its row rather than adding a second one.
+
+## Configuration
+
+`AddMailing` takes a lambda rather than a configuration section, so it is all in one place and typo-proof:
+
+| Setting | Default | Notes |
+| --- | --- | --- |
+| `Schema` | `email` | Holds the send log and, with database templates, the templates table |
+| `Defaults.FromAddress` | `no-reply@localhost` | Used when neither message nor template names a sender |
+| `Defaults.FromName` / `Defaults.ReplyTo` | none | |
+| `Defaults.MaxRecipients` | `50` | Across To + Cc + Bcc |
+| `Defaults.MaxAttachmentBytes` | `10485760` | Total decoded size |
+| `Defaults.AllowedRecipientDomains` | empty | Empty allows every domain; set it in staging so tests cannot mail real customers |
+| `Templates.UseFiles(dir, ext)` | `EmailTemplates`, `scriban` | |
+| `Templates.UseDatabase()` | — | |
+
+SMTP settings live on `AddSmtpTransport`: `Host`, `Port`, `Security`, `Username`, `Password`, `TimeoutSeconds`, `AcceptAllCertificates`.
+
+**`AcceptAllCertificates` disables TLS certificate validation and is for local development only.** SMTP passwords belong in a secret store or environment variables, never in `appsettings.json`.
+
+## Testing against it
+
+`MessagingKit.Testing` drives both halves to completion, so a test asserts on the email rather than sleeping:
+
+```csharp
+outbox.Add(new SendEmail { To = ["ada@example.com"], Subject = "Hi", Text = "Hi" });
+await db.SaveChangesAsync();
+
+await services.DrainMessagingAsync();
+
+var log = await db.Set<EmailLog>().SingleAsync();
+Assert.AreEqual(EmailStatus.Sent, log.Status);
+```
+
+```bash
+dotnet test                                     # unit + integration
+dotnet test tests/MailingKit.Tests              # unit only, no Docker needed
+dotnet test tests/MailingKit.IntegrationTests   # needs Docker
+```
+
+Integration tests run against real Postgres and a real SMTP server via [TestingKit](https://github.com/eduvhc/testing-kit), covering the whole path: staged in a transaction, carried by MessagingKit, handled here, delivered to a mailbox. Nothing in them is faked.
+
+They are `[assembly: DoNotParallelize]` — they share one database and reset between tests, so running them concurrently makes them trample each other.
+
+## Operational notes
+
+- **Delivery is prompt, not instant.** Committing wakes the outbox dispatcher and storing to the inbox wakes the processor, so a message does not sit out the poll interval. The interval is the fallback.
+- **A failed send throws.** `EmailSendException` carries `IsPermanent`, and the inbox decides whether to retry or dead-letter. Nothing here retries.
+- **The send log grows forever.** Add a retention job that deletes old `Sent` rows past your audit window, and keep `Failed` until someone has looked at them.
+- **Bodies are not stored**, only metadata. If you need to reproduce exactly what a customer received, keep the template versioned.
+- **There is no suppression list.** Nothing tracks hard bounces, so a dead address is retried on every send. Add one before sending at volume — it is how a sending domain gets blocklisted.
+- **Set `AllowedRecipientDomains` outside production.** It is the cheapest guard against a staging run mailing real customers.

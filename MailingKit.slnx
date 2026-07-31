@@ -4,6 +4,7 @@
     <Project Path="src/MailingKit.Smtp/MailingKit.Smtp.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/MailingKit.IntegrationTests/MailingKit.IntegrationTests.csproj" />
     <Project Path="tests/MailingKit.Tests/MailingKit.Tests.csproj" />
   </Folder>
 </Solution>

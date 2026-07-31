@@ -1,10 +1,11 @@
+# Local dependencies for the integration tests and for running a host that references MailingKit.
 services:
   postgres:
     image: postgres:17-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: emailservice
+      POSTGRES_DB: mailingkit
     ports:
       - "5433:5432"
     volumes:
@@ -18,26 +19,8 @@ services:
   mailpit:
     image: axllent/mailpit:latest
     ports:
-      - "1026:1025"
-      - "8026:8025"
-
-  api:
-    build: .
-    depends_on:
-      postgres:
-        condition: service_healthy
-      mailpit:
-        condition: service_started
-    environment:
-      ASPNETCORE_ENVIRONMENT: Production
-      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=emailservice;Username=postgres;Password=postgres"
-      Database__MigrateOnStartup: "true"
-      Smtp__Host: mailpit
-      Smtp__Port: "1025"
-      Smtp__Security: None
-      EmailDefaults__FromAddress: no-reply@example.com
-    ports:
-      - "8080:8080"
+      - "1026:1025"   # SMTP
+      - "8026:8025"   # web UI
 
 volumes:
   postgres-data:
