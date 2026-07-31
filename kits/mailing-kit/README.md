@@ -2,7 +2,7 @@
 
 Email as a module for .NET 10, on EF Core and PostgreSQL.
 
-A product references it and gains the ability to send email durably. There is no queue, no dispatcher, and no service to deploy — [MessagingKit](https://github.com/eduvhc/messaging-kit) owns durability, retries, and dead-lettering, and MailingKit is the handler on the other end of it.
+A product references it and gains the ability to send email durably. There is no queue, no dispatcher, and no service to deploy — [MessagingKit](../messaging-kit) owns durability, retries, and dead-lettering, and MailingKit is the handler on the other end of it.
 
 ```csharp
 db.Invoices.Add(invoice);
@@ -282,12 +282,12 @@ Assert.AreEqual(EmailStatus.Sent, log.Status);
 ```
 
 ```bash
-dotnet test                                     # unit + integration
-dotnet test tests/MailingKit.UnitTests              # unit only, no Docker needed
-dotnet test tests/MailingKit.IntegrationTests   # needs Docker
+dotnet test                                                 # every kit
+dotnet test kits/mailing-kit/tests/MailingKit.UnitTests     # no Docker needed
+dotnet test kits/mailing-kit/tests/MailingKit.IntegrationTests   # needs Docker
 ```
 
-Integration tests run against real Postgres and a real SMTP server via [TestingKit](https://github.com/eduvhc/testing-kit), covering the whole path: staged in a transaction, carried by MessagingKit, handled here, delivered to a mailbox. Nothing in them is faked.
+Integration tests run against real Postgres and a real SMTP server via [TestingKit](../testing-kit), covering the whole path: staged in a transaction, carried by MessagingKit, handled here, delivered to a mailbox. Nothing in them is faked.
 
 They are `[assembly: DoNotParallelize]` — they share one database and reset between tests, so running them concurrently makes them trample each other.
 
