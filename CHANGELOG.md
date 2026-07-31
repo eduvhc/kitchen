@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/eduvhc/messaging-kit/compare/v0.1.0...v0.2.0) (2026-07-31)
+
+
+### Features
+
+* give modules durable messaging in one registration ([#2](https://github.com/eduvhc/messaging-kit/issues/2)) ([3e28b2b](https://github.com/eduvhc/messaging-kit/commit/3e28b2bff002e83652640de98fb323816e9780cd))
+
 ## 0.1.0 (2026-07-30)
 
 
