@@ -266,7 +266,7 @@ dotnet test tests/EmailService.IntegrationTests  # needs Docker
 
 `EmailService.Tests` uses in-memory fakes: validation, template resolution, idempotency, retry backoff. Instant, no infrastructure.
 
-`EmailService.IntegrationTests` runs against real infrastructure using [TestingKit](https://github.com/eduvhc/testing-kit) fixtures — a Postgres container and a Mailpit SMTP container started once per assembly, with Respawn truncating the `email` schema between tests. It covers what fakes cannot: the `SKIP LOCKED` claim query and concurrent claimers, lock expiry and reclaim, retry and dead transitions, the `text[]`/`jsonb` mappings, the unique idempotency index, migrations, API-key auth and the admin policy, and end-to-end delivery asserted against the Mailpit inbox.
+`EmailService.IntegrationTests` runs against real infrastructure using [TestingKit](https://github.com/eduvhc/testing-kit) fixtures — a Postgres container and a Mailpit SMTP container started once per assembly, with Respawn truncating the `email` schema between tests. It covers what fakes cannot: the `SKIP LOCKED` claim query and concurrent claimers, lock expiry and reclaim, retry and dead transitions, the `text[]`/`jsonb` mappings, the unique idempotency index, migrations, and end-to-end delivery asserted against the Mailpit inbox.
 
 TestingKit comes from nuget.org and needs no credentials. MessagingKit is currently published only to GitHub Packages, so restore needs a token for that feed; `nuget.config` reads it from the environment and nothing secret is committed:
 
