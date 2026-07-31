@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MailingKit/MailingKit.csproj" />
+    <Project Path="src/MailingKit.Smtp/MailingKit.Smtp.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MailingKit.Tests/MailingKit.Tests.csproj" />
+  </Folder>
+</Solution>
