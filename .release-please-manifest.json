@@ -1,5 +1,5 @@
 {
   "kits/testing-kit": "0.2.0",
   "kits/messaging-kit": "0.2.0",
-  "kits/mailing-kit": "0.0.0"
+  "kits/mailing-kit": "0.1.0"
 }
