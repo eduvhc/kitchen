@@ -12,7 +12,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../MessagingKit.Abstractions/MessagingKit.Abstractions.csproj" />
+    <!-- PrivateAssets="none" so the analyzer shipped in Abstractions reaches consumers of this package. -->
+    <ProjectReference Include="../MessagingKit.Abstractions/MessagingKit.Abstractions.csproj" PrivateAssets="none" />
   </ItemGroup>
 
 </Project>

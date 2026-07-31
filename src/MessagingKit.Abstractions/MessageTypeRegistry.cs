@@ -29,9 +29,9 @@ public sealed class MessageTypeRegistry
     {
         ArgumentNullException.ThrowIfNull(type);
 
-        return _byType.TryGetValue(type, out var name)
-            ? name
-            : type.FullName ?? throw new InvalidOperationException($"Type '{type}' has no resolvable name.");
+        // Falls back to the convention rather than FullName: a namespace move should not rename the
+        // message and orphan rows already on the wire.
+        return _byType.TryGetValue(type, out var name) ? name : MessageName.For(type);
     }
 
     public Type? Resolve(string name) => _byName.GetValueOrDefault(name);

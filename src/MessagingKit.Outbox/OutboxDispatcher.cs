@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using MessagingKit.Outbox.Abstractions;
 using MessagingKit.Outbox.Domain;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,6 +11,7 @@ namespace MessagingKit.Outbox;
 public class OutboxDispatcher(
     IServiceScopeFactory scopeFactory,
     IOptions<OutboxOptions> options,
+    OutboxSignal signal,
     ILogger<OutboxDispatcher> logger) : BackgroundService
 {
     private readonly OutboxOptions _options = options.Value;
@@ -30,7 +32,7 @@ public class OutboxDispatcher(
                 _options.Concurrency);
         }
 
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_options.PollIntervalSeconds));
+        var pollInterval = TimeSpan.FromSeconds(_options.PollIntervalSeconds);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -52,7 +54,8 @@ public class OutboxDispatcher(
 
             try
             {
-                await timer.WaitForNextTickAsync(stoppingToken);
+                // Wakes on a commit that staged rows; the interval is only the fallback.
+                await signal.WaitAsync(pollInterval, stoppingToken);
             }
             catch (OperationCanceledException)
             {
@@ -95,7 +98,7 @@ public class OutboxDispatcher(
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IOutboxStore>();
-        var transport = scope.ServiceProvider.GetRequiredService<IMessageTransport>();
+        var resolver = scope.ServiceProvider.GetRequiredService<IMessageTransportResolver>();
 
         var envelope = new MessageEnvelope
         {
@@ -108,8 +111,20 @@ public class OutboxDispatcher(
             AttemptCount = message.AttemptCount,
         };
 
+        using var activity = MessagingDiagnostics.StartActivity(
+            $"send {message.Type}",
+            ActivityKind.Producer,
+            message.Headers);
+
+        activity?.SetTag("messaging.system", "messagingkit");
+        activity?.SetTag("messaging.operation", "send");
+        activity?.SetTag("messaging.message.id", message.Id);
+        activity?.SetTag("messaging.message.type", message.Type);
+        activity?.SetTag("messaging.attempt", message.AttemptCount);
+
         try
         {
+            var transport = resolver.Resolve(envelope);
             var result = await transport.SendAsync(envelope, ct);
 
             if (result.Success)
@@ -117,6 +132,8 @@ public class OutboxDispatcher(
                 await store.MarkSentAsync(message, ct);
                 return;
             }
+
+            activity?.SetStatus(ActivityStatusCode.Error, result.Error);
 
             await store.MarkFailedAsync(
                 message,
@@ -128,6 +145,13 @@ public class OutboxDispatcher(
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             throw;
+        }
+        catch (InvalidOperationException ex)
+        {
+            // A missing transport registration is a wiring bug; retrying it forever hides that.
+            logger.LogError(ex, "No transport for {MessageId} of type {MessageType}", message.Id, message.Type);
+
+            await store.MarkFailedAsync(message, ex.Message, true, TimeSpan.Zero, CancellationToken.None);
         }
         catch (Exception ex)
         {

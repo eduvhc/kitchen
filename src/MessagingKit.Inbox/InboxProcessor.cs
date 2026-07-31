@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using MessagingKit.Inbox.Abstractions;
 using MessagingKit.Inbox.Domain;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,6 +11,7 @@ namespace MessagingKit.Inbox;
 public class InboxProcessor(
     IServiceScopeFactory scopeFactory,
     IOptions<InboxOptions> options,
+    InboxSignal signal,
     ILogger<InboxProcessor> logger) : BackgroundService
 {
     private readonly InboxOptions _options = options.Value;
@@ -30,7 +32,7 @@ public class InboxProcessor(
                 _options.Concurrency);
         }
 
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(_options.PollIntervalSeconds));
+        var pollInterval = TimeSpan.FromSeconds(_options.PollIntervalSeconds);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -52,7 +54,8 @@ public class InboxProcessor(
 
             try
             {
-                await timer.WaitForNextTickAsync(stoppingToken);
+                // Wakes as soon as a message is stored; the interval is only the fallback.
+                await signal.WaitAsync(pollInterval, stoppingToken);
             }
             catch (OperationCanceledException)
             {
@@ -123,6 +126,19 @@ public class InboxProcessor(
             Headers = message.Headers,
         };
 
+        // Parented to the producer's trace, carried in the headers since the message was staged, so
+        // the send and this handling read as one trace rather than two unrelated ones.
+        using var activity = MessagingDiagnostics.StartActivity(
+            $"handle {message.Type}",
+            ActivityKind.Consumer,
+            message.Headers);
+
+        activity?.SetTag("messaging.system", "messagingkit");
+        activity?.SetTag("messaging.operation", "process");
+        activity?.SetTag("messaging.message.id", message.Id);
+        activity?.SetTag("messaging.message.type", message.Type);
+        activity?.SetTag("messaging.attempt", message.AttemptCount);
+
         try
         {
             var payload = serializer.Deserialize(message.Payload, messageType);
@@ -139,6 +155,8 @@ public class InboxProcessor(
         {
             var inner = ex.InnerException ?? ex;
             logger.LogError(inner, "Handler failed for inbox message {MessageId}", message.Id);
+
+            activity?.SetStatus(ActivityStatusCode.Error, inner.Message);
 
             await store.MarkFailedAsync(
                 message,

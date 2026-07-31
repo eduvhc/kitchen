@@ -1,19 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Description>Transactional outbox on EF Core and PostgreSQL: enlist messages in your own transaction, deliver them with a background dispatcher.</Description>
+    <Description>In-process transport for MessagingKit: delivers outbox messages straight into the inbox, so modules in one host talk over the same seam they would use across a broker.</Description>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
-    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
-    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- PrivateAssets="none" so the analyzer shipped in Abstractions reaches consumers of this package. -->
     <ProjectReference Include="../MessagingKit.Abstractions/MessagingKit.Abstractions.csproj" PrivateAssets="none" />
+    <ProjectReference Include="../MessagingKit.Inbox/MessagingKit.Inbox.csproj" />
+    <ProjectReference Include="../MessagingKit.Outbox/MessagingKit.Outbox.csproj" />
   </ItemGroup>
 
 </Project>

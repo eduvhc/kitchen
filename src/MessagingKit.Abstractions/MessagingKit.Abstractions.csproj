@@ -4,8 +4,40 @@
     <Description>Transport-agnostic messaging contracts: envelopes, transports, handlers.</Description>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <AnalyzerAssembly>$(MSBuildThisFileDirectory)../MessagingKit.Analyzers/bin/$(Configuration)/netstandard2.0/MessagingKit.Analyzers.dll</AnalyzerAssembly>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
   </ItemGroup>
+
+  <!--
+    The analyzer ships inside this package so anything referencing MessagingKit gets the wiring
+    checks. ReferenceOutputAssembly is false because the analyzer is tooling, not a runtime
+    dependency; only its assembly is packed.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="../MessagingKit.Analyzers/MessagingKit.Analyzers.csproj"
+                      ReferenceOutputAssembly="false"
+                      OutputItemType="Analyzer"
+                      PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="$(AnalyzerAssembly)"
+          Pack="true"
+          PackagePath="analyzers/dotnet/cs"
+          Visible="false" />
+  </ItemGroup>
+
+  <!--
+    A missing analyzer would otherwise pack silently, shipping a release with no diagnostics and no
+    warning that anything was lost.
+  -->
+  <Target Name="EnsureAnalyzerIsPacked" BeforeTargets="GenerateNuspec">
+    <Error Condition="!Exists('$(AnalyzerAssembly)')"
+           Text="MessagingKit.Analyzers.dll was not found at '$(AnalyzerAssembly)'. Build the analyzer in the $(Configuration) configuration before packing, or the package ships without its diagnostics." />
+  </Target>
 
 </Project>

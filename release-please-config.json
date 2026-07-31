@@ -35,8 +35,7 @@
   ],
   "packages": {
     ".": {
-      "package-name": "MessagingKit",
-      "release-as": "0.1.0"
+      "package-name": "MessagingKit"
     }
   }
 }
