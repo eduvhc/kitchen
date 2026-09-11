@@ -28,7 +28,7 @@ dotnet nuget add source https://nuget.pkg.github.com/eduvhc/index.json \
 | `TestingKit.SqlServer` | `SqlServerFixture` — SQL Server container, SQL helpers, Respawn reset |
 | `TestingKit.Smtp` | `SmtpFixture` — Mailpit container, inbox polling and assertions |
 | `TestingKit.Azurite` | `AzuriteFixture` — blob storage emulator |
-| `TestingKit.RabbitMq` | `RabbitMqFixture` — publish, consume, purge |
+| `TestingKit.RabbitMq` | `RabbitMqFixture` — publish, consume with headers, purge |
 | `TestingKit.EntityFramework` | EF Core migration helpers for any fixture |
 | `TestingKit.AspNetCore` | `TestingKitWebApplicationFactory<TEntryPoint>` |
 | `TestingKit.MSTest` | `IntegrationTest` base class with per-test reset |
@@ -84,6 +84,26 @@ Containers start once per assembly. `IntegrationTest` resets every resettable fi
 ## Reset model
 
 `SnapshotAsync()` records the schema as it stands — call it after migrations and seed data. `ResetAsync()` then deletes everything written since, keeping tables, indexes, and migration history. `TestEnvironment.ResetAsync()` fans out to every fixture implementing `IResettableFixture`: Postgres and SQL Server truncate via Respawn, `SmtpFixture` empties the inbox, `AzuriteFixture` clears the containers you list, `RabbitMqFixture` purges the queues you list.
+
+## Message headers
+
+`ConsumeAsync` gives you the body. When the consumer under test reads metadata — trace context,
+correlation ids, routing hints — use `ConsumeMessageAsync` and publish with headers:
+
+```csharp
+await fixture.PublishAsync(exchange, queue, order,
+    headers: new Dictionary<string, object?> { ["traceparent"] = traceParent });
+
+var message = await fixture.ConsumeMessageAsync(queue);
+
+Assert.AreEqual(traceParent, message!.GetHeaderString("traceparent"));
+```
+
+An AMQP field table carries strings as `byte[]`, so casting `Headers["traceparent"]` to `string` gets a
+surprise — `GetHeaderString` decodes it. The raw value stays on `Headers` for anyone who needs the
+bytes, which is also what you want if your host hands the consumer a *serialized* copy of the
+properties rather than the live object: build that shape in your own test from the raw headers, so the
+test stays honest about the encoding your consumer actually meets.
 
 ## Wiring an ASP.NET Core app
 

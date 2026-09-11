@@ -20,6 +20,29 @@ public sealed class RabbitMqClientOptions : ClientOptions
     public IList<string> QueuesToPurge { get; } = [];
 }
 
+/// <summary>A consumed message with the headers a body-only read throws away.</summary>
+/// <param name="Body">The UTF-8 message body.</param>
+/// <param name="Headers">
+/// Headers as they came off the wire. AMQP field tables carry strings as <see langword="byte"/>[],
+/// so read text values through <see cref="GetHeaderString"/> rather than casting.
+/// </param>
+public sealed record RabbitMqMessage(string Body, IReadOnlyDictionary<string, object?> Headers)
+{
+    /// <summary>
+    /// Reads a header as text, decoding the <see langword="byte"/>[] an AMQP field table actually
+    /// holds. Returns <see langword="null"/> when the header is absent.
+    /// </summary>
+    public string? GetHeaderString(string name) =>
+        Headers.TryGetValue(name, out var value)
+            ? value switch
+            {
+                null => null,
+                byte[] bytes => Encoding.UTF8.GetString(bytes),
+                _ => value.ToString(),
+            }
+            : null;
+}
+
 public class RabbitMqFixture(
     RabbitMqContainerOptions? containerOptions = null,
     RabbitMqClientOptions? clientOptions = null)
@@ -40,6 +63,17 @@ public class RabbitMqFixture(
         string exchangeType = "fanout",
         CancellationToken ct = default)
         where T : class
+        => await PublishAsync(exchange, queue, message, headers: null, exchangeType, ct);
+
+    /// <summary>Publishes with extra headers — for asserting what a consumer reads back off the wire.</summary>
+    public async Task PublishAsync<T>(
+        string exchange,
+        string queue,
+        T message,
+        IReadOnlyDictionary<string, object?>? headers,
+        string exchangeType = "fanout",
+        CancellationToken ct = default)
+        where T : class
     {
         EnsureReady();
         var body = JsonSerializer.SerializeToUtf8Bytes(message, SerializerOptions);
@@ -51,15 +85,68 @@ public class RabbitMqFixture(
             await channel.QueueDeclareAsync(queue, durable: true, exclusive: false, autoDelete: false, cancellationToken: ct);
             await channel.QueueBindAsync(queue, exchange, string.Empty, cancellationToken: ct);
 
-            var properties = new BasicProperties
-            {
-                Headers = new Dictionary<string, object?> { ["exchange"] = exchange },
-            };
+            var messageHeaders = new Dictionary<string, object?> { ["exchange"] = exchange };
 
-            await channel.BasicPublishAsync(exchange, string.Empty, false, properties, body, ct);
+            if (headers is not null)
+            {
+                foreach (var (key, value) in headers)
+                {
+                    messageHeaders[key] = value;
+                }
+            }
+
+            await channel.BasicPublishAsync(
+                exchange,
+                string.Empty,
+                false,
+                new BasicProperties { Headers = messageHeaders },
+                body,
+                ct);
         }
 
         await ReleaseAsync(connection);
+    }
+
+    /// <summary>
+    /// Consumes a message with its headers. Use this instead of
+    /// <see cref="ConsumeAsync(string, TimeSpan?, CancellationToken)"/> when the consumer under test
+    /// reads message metadata — trace context, correlation ids, routing hints.
+    /// </summary>
+    public async Task<RabbitMqMessage?> ConsumeMessageAsync(
+        string queue,
+        TimeSpan? timeout = null,
+        CancellationToken ct = default)
+    {
+        EnsureReady();
+        var connection = await GetConnectionAsync();
+        var deadline = DateTimeOffset.UtcNow + (timeout ?? TimeSpan.FromSeconds(5));
+
+        try
+        {
+            await using var channel = await connection.CreateChannelAsync(cancellationToken: ct);
+
+            while (DateTimeOffset.UtcNow < deadline)
+            {
+                var result = await channel.BasicGetAsync(queue, autoAck: true, ct);
+
+                if (result is not null)
+                {
+                    var headers = result.BasicProperties.Headers is { } wireHeaders
+                        ? new Dictionary<string, object?>(wireHeaders)
+                        : [];
+
+                    return new RabbitMqMessage(Encoding.UTF8.GetString(result.Body.ToArray()), headers);
+                }
+
+                await Task.Delay(TimeSpan.FromMilliseconds(100), ct);
+            }
+
+            return null;
+        }
+        finally
+        {
+            await ReleaseAsync(connection);
+        }
     }
 
     public async Task<string?> ConsumeAsync(string queue, TimeSpan? timeout = null, CancellationToken ct = default)
