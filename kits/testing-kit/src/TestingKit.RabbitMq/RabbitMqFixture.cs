@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using RabbitMQ.Client;
+using RabbitMQ.Client.Exceptions;
 using Testcontainers.RabbitMq;
 
 namespace TestingKit.RabbitMq;
@@ -48,6 +49,8 @@ public class RabbitMqFixture(
     RabbitMqClientOptions? clientOptions = null)
     : TestFixtureBase<RabbitMqContainerOptions, RabbitMqClientOptions>(containerOptions, clientOptions), IResettableFixture
 {
+    private const ushort NotFound = 404;
+
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         ReferenceHandler = ReferenceHandler.IgnoreCycles,
@@ -186,17 +189,29 @@ public class RabbitMqFixture(
         return json is null ? null : JsonSerializer.Deserialize<T>(json, SerializerOptions);
     }
 
+    /// <summary>
+    /// Empties a queue. A queue that does not exist yet is already empty, so that case is a no-op
+    /// rather than an error — otherwise a reset before the first publish fails the run.
+    /// </summary>
     public async Task PurgeAsync(string queue, CancellationToken ct = default)
     {
         EnsureReady();
         var connection = await GetConnectionAsync();
 
-        await using (var channel = await connection.CreateChannelAsync(cancellationToken: ct))
+        try
         {
+            // The broker closes the channel on a 404, so this gets one of its own.
+            await using var channel = await connection.CreateChannelAsync(cancellationToken: ct);
             await channel.QueuePurgeAsync(queue, ct);
         }
-
-        await ReleaseAsync(connection);
+        catch (OperationInterruptedException ex) when (ex.ShutdownReason?.ReplyCode == NotFound)
+        {
+            // Nothing to empty.
+        }
+        finally
+        {
+            await ReleaseAsync(connection);
+        }
     }
 
     public async Task ResetAsync(CancellationToken ct = default)

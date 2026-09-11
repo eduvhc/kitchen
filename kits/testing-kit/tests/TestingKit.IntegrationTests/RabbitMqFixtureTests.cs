@@ -32,6 +32,16 @@ public class RabbitMqFixtureTests : IntegrationTest
         Assert.IsNull(body);
     }
 
+    /// <summary>
+    /// A reset runs before every test, including the first — before anything has declared the queue.
+    /// A queue that does not exist is already empty, so this must not throw.
+    /// </summary>
+    [TestMethod]
+    public async Task Purging_a_queue_that_does_not_exist_is_a_no_op()
+    {
+        await TestHost.RabbitMq.PurgeAsync("testingkit.never-declared", CancellationToken);
+    }
+
     [TestMethod]
     public async Task Reset_purges_the_configured_queues()
     {
