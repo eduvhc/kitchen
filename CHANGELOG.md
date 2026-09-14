@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.4](https://github.com/eduvhc/kitchen/compare/v0.2.3...v0.2.4) (2026-09-14)
+
+
+### Dependencies
+
+* bump MinVer to 8.0.0 ([3f057a1](https://github.com/eduvhc/kitchen/commit/3f057a14e8b69d294499d198d886054e3396edc2))
+* bump MSTest to 4.4.0 ([3f057a1](https://github.com/eduvhc/kitchen/commit/3f057a14e8b69d294499d198d886054e3396edc2))
+* bump Testcontainers to 4.15.0 (Testcontainers, Azurite, MsSql, PostgreSql, RabbitMq) ([3f057a1](https://github.com/eduvhc/kitchen/commit/3f057a14e8b69d294499d198d886054e3396edc2))
+
+
+### Chores
+
+* release 0.2.4 ([3f057a1](https://github.com/eduvhc/kitchen/commit/3f057a14e8b69d294499d198d886054e3396edc2))
+
 ## [0.2.3](https://github.com/eduvhc/kitchen/compare/v0.2.2...v0.2.3) (2026-09-14)
 
 
