@@ -31,11 +31,11 @@
     <PackageVersion Include="RabbitMQ.Client" Version="7.2.2" />
     <PackageVersion Include="Respawn" Version="7.0.0" />
     <PackageVersion Include="Scriban" Version="7.2.6" />
-    <PackageVersion Include="Testcontainers" Version="4.14.0" />
-    <PackageVersion Include="Testcontainers.Azurite" Version="4.14.0" />
-    <PackageVersion Include="Testcontainers.MsSql" Version="4.14.0" />
-    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.14.0" />
-    <PackageVersion Include="Testcontainers.RabbitMq" Version="4.14.0" />
+    <PackageVersion Include="Testcontainers" Version="4.15.0" />
+    <PackageVersion Include="Testcontainers.Azurite" Version="4.15.0" />
+    <PackageVersion Include="Testcontainers.MsSql" Version="4.15.0" />
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
+    <PackageVersion Include="Testcontainers.RabbitMq" Version="4.15.0" />
     <PackageVersion Include="TestingKit" Version="0.2.0" />
     <PackageVersion Include="TestingKit.MSTest" Version="0.2.0" />
     <PackageVersion Include="TestingKit.Postgres" Version="0.2.0" />
