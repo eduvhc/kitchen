@@ -1,4 +1,5 @@
 using TestingKit.Postgres;
+using TestingKit.RabbitMq;
 using TestingKit.Smtp;
 
 namespace TestingKit.IntegrationTests;
@@ -25,6 +26,17 @@ public static class TestHost
 
     public static SmtpFixture Smtp { get; } = new();
 
+    public const string Exchange = "testingkit.exchange";
+
+    public const string Queue = "testingkit.queue";
+
+    public static RabbitMqFixture RabbitMq { get; } = new(
+        clientOptions: new RabbitMqClientOptions
+        {
+            ReuseConnection = true,
+            QueuesToPurge = { Queue },
+        });
+
     [AssemblyInitialize]
     public static async Task InitializeAsync(TestContext context)
     {
@@ -34,7 +46,11 @@ public static class TestHost
         Environment
             .AddFixture(Smtp);
 
+        Environment
+            .AddFixture(RabbitMq);
+
         Environment.AddSetting("ConnectionStrings:Postgres", () => Postgres.ConnectionString);
+        Environment.AddSetting("ConnectionStrings:RabbitMq", () => RabbitMq.ConnectionString);
         Environment.AddSetting("Smtp:Port", () => Smtp.SmtpPort.ToString());
 
         await Environment.StartAsync(context.CancellationToken);
