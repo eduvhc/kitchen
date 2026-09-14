@@ -7,7 +7,7 @@
 
   <ItemGroup>
     <PackageVersion Include="Azure.Storage.Blobs" Version="12.29.2" />
-    <PackageVersion Include="MSTest" Version="4.3.3" />
+    <PackageVersion Include="MSTest" Version="4.4.0" />
     <PackageVersion Include="MailKit" Version="4.17.0" />
     <PackageVersion Include="MessagingKit" Version="0.2.0" />
     <PackageVersion Include="MessagingKit.Testing" Version="0.2.0" />
