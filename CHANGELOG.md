@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.2.3](https://github.com/eduvhc/kitchen/compare/v0.2.2...v0.2.3) (2026-09-14)
+
+
+### Features
+
+* **testing-kit:** expose message headers from RabbitMqFixture (ConsumeMessageAsync, PublishAsync with headers) ([47cd618](https://github.com/eduvhc/kitchen/commit/47cd618a2326f3dbe160285db59d0d17c46fd110))
+
+
+### Bug Fixes
+
+* **testing-kit:** purging a queue that does not exist yet is a no-op ([47cd618](https://github.com/eduvhc/kitchen/commit/47cd618a2326f3dbe160285db59d0d17c46fd110))
+
+
+### Dependencies
+
+* bump Testcontainers to 4.14.0, clearing the NU1903 SSH.NET advisory without suppressions ([47cd618](https://github.com/eduvhc/kitchen/commit/47cd618a2326f3dbe160285db59d0d17c46fd110))
+
 ## [0.2.2](https://github.com/eduvhc/kitchen/compare/v0.2.1...v0.2.2) (2026-07-31)
 
 
