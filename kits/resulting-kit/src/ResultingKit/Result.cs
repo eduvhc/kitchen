@@ -2,17 +2,12 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace ResultingKit;
 
-/// <summary>
-/// The outcome of an operation that can fail in an expected way. Exceptions stay for bugs and broken
-/// wiring; a result is for failures the caller is meant to handle.
-/// </summary>
 public class Result
 {
     private static readonly Result s_success = new(null);
 
     private protected Result(Error? error) => Error = error;
 
-    /// <summary>Null exactly when <see cref="IsSuccess"/> is true.</summary>
     public Error? Error { get; }
 
     [MemberNotNullWhen(false, nameof(Error))]

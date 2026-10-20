@@ -1,6 +1,5 @@
 namespace ResultingKit;
 
-/// <summary>Chains over <c>Task&lt;Result&lt;T&gt;&gt;</c> so an async pipeline needs no await per step.</summary>
 public static class ResultTaskExtensions
 {
     public static async Task<Result<TOut>> MapAsync<TValue, TOut>(

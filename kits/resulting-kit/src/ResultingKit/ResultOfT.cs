@@ -2,16 +2,13 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace ResultingKit;
 
-/// <summary>A <see cref="Result"/> that carries a value when it succeeds.</summary>
-[SuppressMessage("Design", "CA1000:Do not declare static members on generic types",
-    Justification = "Result<T>.Success(value) is the point of the type; the non-generic Result offers inferred forms too.")]
+[SuppressMessage("Design", "CA1000:Do not declare static members on generic types", Justification = "Factory API.")]
 public sealed class Result<TValue> : Result
 {
     private readonly TValue _value;
 
     private Result(TValue value, Error? error) : base(error) => _value = value;
 
-    /// <exception cref="InvalidOperationException">The result is a failure; check <see cref="Result.IsSuccess"/> first.</exception>
     public TValue Value => IsSuccess
         ? _value
         : throw new InvalidOperationException($"A failed result has no value. {Error}");

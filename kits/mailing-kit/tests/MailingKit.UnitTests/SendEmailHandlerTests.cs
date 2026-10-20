@@ -116,6 +116,45 @@ public class SendEmailHandlerTests
     }
 
     [TestMethod]
+    public async Task Treats_every_non_transient_error_as_permanent()
+    {
+        await using var db = NewContext();
+        _sender.Behaviour = _ => Error.Validation("smtp.malformed_address", "Malformed address: ada@");
+
+        var error = await Assert.ThrowsExactlyAsync<EmailSendException>(() => HandleAsync(db, new SendEmail
+        {
+            To = ["ada@example.com"],
+            Subject = "Hello",
+            Text = "Hello",
+        }));
+
+        Assert.IsTrue(error.IsPermanent);
+        StringAssert.StartsWith(error.Message, "smtp.malformed_address: ");
+
+        var log = await db.Set<EmailLog>().SingleAsync();
+        Assert.AreEqual("smtp.malformed_address: Malformed address: ada@", log.LastError);
+    }
+
+    [TestMethod]
+    public async Task Records_a_send_without_a_provider_id()
+    {
+        await using var db = NewContext();
+        _sender.Behaviour = _ => new SendReceipt();
+
+        await HandleAsync(db, new SendEmail
+        {
+            To = ["ada@example.com"],
+            Subject = "Hello",
+            Text = "Hello",
+        });
+
+        var log = await db.Set<EmailLog>().SingleAsync();
+        Assert.AreEqual(EmailStatus.Sent, log.Status);
+        Assert.IsNull(log.ProviderMessageId);
+        Assert.IsNull(log.LastError);
+    }
+
+    [TestMethod]
     public async Task A_redelivered_message_updates_its_row_rather_than_adding_another()
     {
         await using var db = NewContext();
