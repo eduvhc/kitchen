@@ -73,6 +73,8 @@ ETags are opaque; pass back exactly what a `PutReceipt` or `StoredObject` gave y
 
 Every put is verified end to end with `Content-MD5`, which Azure, S3, R2 and MinIO all check before committing. StoringKit computes the MD5 of seekable streams itself; pass `PutObjectOptions.ContentMd5` when you already have it (for example from a client upload). A mismatch is `storing.checksum_mismatch` and nothing is stored.
 
+On Azure, an upload that fits one request (up to 256 MiB by default) is checked against the whole-object MD5. Larger or non-seekable uploads go up in blocks: the SDK sends an MD5 with each block, and the service rejects any block that arrives corrupted. The whole-object MD5 is stored on the blob but the service doesn't check it at commit. The S3 provider always sends one `PutObject`, so the whole object is always checked.
+
 `StoredObject.ContentMd5` reports it back: Azure stores it as the blob's `Content-MD5`; S3 does not return `Content-MD5` after upload, so the S3 provider also keeps it in a `storingkit-md5` metadata entry, which is hidden from `Metadata`. Objects written by other tools — and Azure uploads from non-seekable streams without a supplied MD5 — may have none.
 
 ### Public and private access
@@ -103,7 +105,7 @@ The rules are the intersection of what every provider stores without rewriting:
 | --- | --- | --- | --- | --- |
 | Package | `StoringKit.Azure` | `StoringKit.S3` | `StoringKit.S3` | `StoringKit.S3` |
 | Conditional writes | ✅ | ✅ | ✅ | ✅ |
-| `Content-MD5` verification | ✅ | ✅ | ✅ | ✅ |
+| `Content-MD5` verification | ✅ whole object ≤ 256 MiB, per block above | ✅ | ✅ | ✅ |
 | Read URLs | SAS: account key or user delegation key | Presigned | Presigned | Presigned |
 | Largest single put | Unlimited in practice — the SDK stages blocks | 5 GiB | 5 GiB | 5 GiB |
 | Non-seekable streams | Streamed | Buffered to a temporary file first | Buffered | Buffered |

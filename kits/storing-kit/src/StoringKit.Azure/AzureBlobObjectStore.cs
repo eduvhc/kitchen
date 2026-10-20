@@ -1,4 +1,5 @@
 using Azure;
+using Azure.Storage;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
@@ -55,6 +56,10 @@ internal sealed class AzureBlobObjectStore : ObjectStore, IDisposable
             },
             Metadata = write.Metadata.ToDictionary(StringComparer.Ordinal),
             Conditions = ToConditions(write.Condition),
+
+            // The SDK sends an MD5 with every request it makes — the whole blob, or each staged block — and the service
+            // rejects any that arrive corrupted. ContentHash above is the whole-object MD5 stored on the blob.
+            TransferValidation = new UploadTransferValidationOptions { ChecksumAlgorithm = StorageChecksumAlgorithm.MD5 },
         };
 
         var response = await blob.UploadAsync(counting ?? write.Content, options, ct).ConfigureAwait(false);
