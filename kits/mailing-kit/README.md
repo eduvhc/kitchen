@@ -33,14 +33,15 @@ What is left is the part that is actually about email.
 | --- | --- |
 | `MailingKit` | `SendEmail`, the handler, templates, send log |
 | `MailingKit.Smtp` | `SmtpEmailSender` on MailKit |
+| `MailingKit.Resend` | `ResendEmailSender` on `HttpClient` and the [Resend](https://resend.com) API — no SDK |
 
 ```bash
 dotnet add package MessagingKit
 dotnet add package MailingKit
-dotnet add package MailingKit.Smtp
+dotnet add package MailingKit.Smtp      # or MailingKit.Resend
 ```
 
-`MailingKit.Smtp` is separate so a host on Resend or SES never pulls in MailKit.
+Each transport is its own package, so a host on Resend never pulls in MailKit and a host on SMTP never pulls in `Microsoft.Extensions.Http`. Register exactly one.
 
 ## Quick start
 
@@ -204,7 +205,57 @@ Then call `modelBuilder.AddEmailTemplates()` and inject `IWritableTemplateStore`
 
 Omit both and a message naming a template fails with an explanatory error rather than sending something blank.
 
-## Another provider
+## Resend
+
+`MailingKit.Resend` sends through Resend's HTTP API (`POST /emails`) with a typed `HttpClient` from `IHttpClientFactory`. There is no Resend SDK in the dependency graph.
+
+```bash
+dotnet add package MailingKit.Resend
+```
+
+```csharp
+using MailingKit.Resend;
+
+builder.Services.AddResendTransport(builder.Configuration);   // instead of AddSmtpTransport()
+```
+
+It binds the `Resend` section:
+
+```json
+{
+  "Resend": {
+    "BaseUrl": "https://api.resend.com/",
+    "TimeoutSeconds": 30
+  }
+}
+```
+
+| Setting | Default | Notes |
+| --- | --- | --- |
+| `ApiKey` | — | **Required.** Put it in a secret store or `Resend__ApiKey`, never in `appsettings.json` |
+| `BaseUrl` | `https://api.resend.com/` | Change only for a proxy or a stub |
+| `TimeoutSeconds` | `30` | Per request; a timeout is reported as transient |
+
+Options are validated at startup, so a host with no `ApiKey` fails to boot instead of dead-lettering every email. `AddResendTransport(o => o.ApiKey = ...)` sets them in code instead.
+
+Everything on `OutgoingEmail` is sent: sender name, To/Cc/Bcc, Reply-To, HTML and text bodies, custom headers, and attachments. An attachment with a `ContentId` goes out as an inline image, referenced from the HTML as `cid:`.
+
+How Resend's answers reach the inbox:
+
+| Response | `ErrorKind` | Inbox |
+| --- | --- | --- |
+| `2xx` | — | `SendReceipt` with Resend's email id, stored on the send log |
+| `429`, `5xx`, timeout, network failure | `Transient` | Retried |
+| `422` | `Validation` | Dead-lettered |
+| `401` / `403` | `Unauthorized` / `Forbidden` | Dead-lettered |
+| `409` | `Conflict` (`Transient` for `concurrent_idempotent_requests`) | Dead-lettered (retried) |
+| any other `4xx` | `Failure` | Dead-lettered |
+
+Error codes are `resend.` plus Resend's own error name — `resend.validation_error`, `resend.rate_limit_exceeded` — and the message is Resend's, prefixed with the status. A body that is not Resend's JSON (a proxy's HTML page, say) is kept as the message under `resend.http_<status>`.
+
+**No idempotency key is sent yet.** `OutgoingEmail` carries no stable id, so if Resend accepts an email but the response is lost to a timeout, the retry can deliver it twice.
+
+## Writing another transport
 
 Implement one method:
 
@@ -212,29 +263,29 @@ Implement one method:
 using MailingKit.Transport;
 using ResultingKit;
 
-public sealed class ResendEmailSender(HttpClient http) : IEmailSender
+public sealed class AcmeMailSender(HttpClient http) : IEmailSender
 {
     public async Task<Result<SendReceipt>> SendAsync(OutgoingEmail email, CancellationToken ct = default)
     {
-        var response = await http.PostAsJsonAsync("/emails", Map(email), ct);
+        using var response = await http.PostAsJsonAsync("send", Map(email), ct);
 
         if (response.IsSuccessStatusCode)
         {
             return new SendReceipt(await ReadProviderIdAsync(response, ct));
         }
 
-        return (int)response.StatusCode >= 500
-            ? Error.Transient("resend.unavailable", $"{(int)response.StatusCode} from provider")
-            : Error.Failure("resend.rejected", await response.Content.ReadAsStringAsync(ct));
+        return (int)response.StatusCode is 429 or >= 500
+            ? Error.Transient("acme.unavailable", $"{(int)response.StatusCode} from provider")
+            : Error.Failure("acme.rejected", await response.Content.ReadAsStringAsync(ct));
     }
 }
 ```
 
 ```csharp
-builder.Services.AddScoped<IEmailSender, ResendEmailSender>();   // instead of AddSmtpTransport()
+builder.Services.AddHttpClient<IEmailSender, AcmeMailSender>();   // instead of AddSmtpTransport()
 ```
 
-`OutgoingEmail` arrives fully resolved — templates rendered, recipients validated — so a transport only has to move bytes. Return an `Error.Transient` only for what retrying can fix; any other [ResultingKit](../resulting-kit) error kind is permanent, and the inbox dead-letters those instead of burning ten attempts on a malformed address.
+`OutgoingEmail` arrives fully resolved — templates rendered, recipients validated — so a transport only has to move bytes. Return an `Error.Transient` only for what retrying can fix; any other [ResultingKit](../resulting-kit) error kind is permanent, and the inbox dead-letters those instead of burning ten attempts on a malformed address. Let the caller's cancellation throw rather than turning it into an error. `MailingKit.Resend` is a complete, small example to copy from.
 
 ## The send log
 
@@ -264,7 +315,7 @@ Keyed unique on `message_id`, so a redelivered message updates its row rather th
 | `Templates.UseFiles(dir, ext)` | `EmailTemplates`, `scriban` | |
 | `Templates.UseDatabase()` | — | |
 
-SMTP settings live on `AddSmtpTransport`: `Host`, `Port`, `Security`, `Username`, `Password`, `TimeoutSeconds`, `AcceptAllCertificates`.
+SMTP settings live on `AddSmtpTransport`: `Host`, `Port`, `Security`, `Username`, `Password`, `TimeoutSeconds`, `AcceptAllCertificates`. Resend settings live in the `Resend` section — see [Resend](#resend).
 
 **`AcceptAllCertificates` disables TLS certificate validation and is for local development only.** SMTP passwords belong in a secret store or environment variables, never in `appsettings.json`.
 
