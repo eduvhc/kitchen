@@ -21,6 +21,8 @@ internal sealed class EmailLogConfiguration(string schema) : IEntityTypeConfigur
         entity.Property(e => e.Cc).HasColumnName("cc_addresses").HasColumnType("text[]");
         entity.Property(e => e.Bcc).HasColumnName("bcc_addresses").HasColumnType("text[]");
         entity.Property(e => e.Subject).HasColumnName("subject").HasMaxLength(1000).IsRequired();
+        entity.Property(e => e.HtmlBody).HasColumnName("html_body");
+        entity.Property(e => e.TextBody).HasColumnName("text_body");
         entity.Property(e => e.TemplateKey).HasColumnName("template_key").HasMaxLength(200);
         entity.Property(e => e.Status).HasColumnName("status").HasConversion<int>();
         entity.Property(e => e.AttemptCount).HasColumnName("attempt_count");

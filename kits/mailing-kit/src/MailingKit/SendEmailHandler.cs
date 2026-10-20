@@ -24,6 +24,8 @@ internal sealed class SendEmailHandler<TContext>(
     ITemplateStore? templates = null) : IMessageHandler<SendEmail>
     where TContext : DbContext
 {
+    internal const string InterruptedError = "Interrupted: the attempt ended before the transport answered.";
+
     private readonly EmailDefaultsOptions _defaults = options.Value.Defaults;
 
     public async Task HandleAsync(SendEmail message, MessageContext context, CancellationToken ct = default)
@@ -31,37 +33,46 @@ internal sealed class SendEmailHandler<TContext>(
         ArgumentNullException.ThrowIfNull(message);
         ArgumentNullException.ThrowIfNull(context);
 
+        // A retried attempt reuses its row rather than adding another: one row per message.
+        var log = await db.Set<EmailLog>().FirstOrDefaultAsync(e => e.MessageId == context.MessageId, ct);
+
+        if (log is { Status: EmailStatus.Sent })
+        {
+            // The inbox is at-least-once: it reruns a handler whose success it failed to record.
+            return;
+        }
+
         var recipients = SendEmailValidator.Normalize(message.To);
         var cc = SendEmailValidator.Normalize(message.Cc);
         var bcc = SendEmailValidator.Normalize(message.Bcc);
 
         SendEmailValidator.ValidateRecipients(recipients, cc, bcc, _defaults);
 
-        var content = await ResolveContentAsync(message, ct);
-
-        SendEmailValidator.ValidateContent(content.Subject, content.Html, content.Text);
-
         var attachments = SendEmailValidator.MapAttachments(message.Attachments, _defaults);
 
+        log ??= await PinAsync(message, context, recipients, cc, bcc, ct);
+
+        // Built from the pinned row, not re-rendered: a template edited between attempts would
+        // otherwise change the payload, and a provider holding this idempotency key rejects that.
         var outgoing = new OutgoingEmail
         {
             IdempotencyKey = IdempotencyKeyFor(context.MessageId),
-            FromAddress = content.FromAddress,
-            FromName = content.FromName,
-            ReplyTo = message.ReplyTo ?? _defaults.ReplyTo,
+            FromAddress = log.FromAddress,
+            FromName = log.FromName,
+            ReplyTo = log.ReplyTo,
             To = recipients,
             Cc = cc,
             Bcc = bcc,
-            Subject = content.Subject,
-            HtmlBody = content.Html,
-            TextBody = content.Text,
+            Subject = log.Subject,
+            HtmlBody = log.HtmlBody,
+            TextBody = log.TextBody,
             Attachments = attachments,
             Headers = new Dictionary<string, string>(message.Headers),
         };
 
         var result = await sender.SendAsync(outgoing, ct);
 
-        await RecordAsync(message, context, outgoing, result, ct);
+        await RecordAsync(log, context, result, ct);
 
         if (result.IsSuccess)
         {
@@ -72,44 +83,62 @@ internal sealed class SendEmailHandler<TContext>(
         throw new EmailSendException(result.Error.ToString(), !result.Error.IsTransient);
     }
 
-    private async Task RecordAsync(
+    /// <summary>
+    /// Renders the email and saves the result before the first send, so every later attempt sends the
+    /// same content even if the process dies before the provider's answer is recorded.
+    /// </summary>
+    private async Task<EmailLog> PinAsync(
         SendEmail message,
         MessageContext context,
-        OutgoingEmail outgoing,
-        Result<SendReceipt> result,
+        List<string> recipients,
+        List<string> cc,
+        List<string> bcc,
         CancellationToken ct)
     {
-        var now = clock.GetUtcNow();
-        var logs = db.Set<EmailLog>();
+        var content = await ResolveContentAsync(message, ct);
 
-        // A retried attempt updates its row rather than adding another: one row per message.
-        var existing = await logs.FirstOrDefaultAsync(e => e.MessageId == context.MessageId, ct);
+        SendEmailValidator.ValidateContent(content.Subject, content.Html, content.Text);
 
-        if (existing is null)
+        var log = new EmailLog
         {
-            existing = new EmailLog
-            {
-                MessageId = context.MessageId,
-                Source = string.IsNullOrWhiteSpace(message.Source) ? null : message.Source,
-                FromAddress = outgoing.FromAddress,
-                FromName = outgoing.FromName,
-                ReplyTo = outgoing.ReplyTo,
-                To = outgoing.To,
-                Cc = outgoing.Cc,
-                Bcc = outgoing.Bcc,
-                Subject = outgoing.Subject,
-                TemplateKey = message.Template,
-                CreatedAt = now,
-            };
+            MessageId = context.MessageId,
+            Source = string.IsNullOrWhiteSpace(message.Source) ? null : message.Source,
+            FromAddress = content.FromAddress,
+            FromName = content.FromName,
+            ReplyTo = message.ReplyTo ?? _defaults.ReplyTo,
+            To = recipients,
+            Cc = cc,
+            Bcc = bcc,
+            Subject = content.Subject,
+            HtmlBody = content.Html,
+            TextBody = content.Text,
+            TemplateKey = message.Template,
+            CreatedAt = clock.GetUtcNow(),
 
-            logs.Add(existing);
+            // Overwritten by the outcome; left standing only if the attempt never reports back.
+            AttemptCount = context.AttemptCount,
+            Status = EmailStatus.Failed,
+            LastError = InterruptedError,
+        };
+
+        db.Set<EmailLog>().Add(log);
+        await db.SaveChangesAsync(ct);
+        return log;
+    }
+
+    private async Task RecordAsync(EmailLog log, MessageContext context, Result<SendReceipt> result, CancellationToken ct)
+    {
+        log.AttemptCount = context.AttemptCount;
+        log.Status = result.IsSuccess ? EmailStatus.Sent : EmailStatus.Failed;
+        log.SentAt = result.IsSuccess ? clock.GetUtcNow() : null;
+        log.ProviderMessageId = result.IsSuccess ? result.Value.ProviderMessageId : null;
+        log.LastError = Truncate(result.Error?.ToString());
+
+        if (result.IsSuccess)
+        {
+            log.HtmlBody = null;
+            log.TextBody = null;
         }
-
-        existing.AttemptCount = context.AttemptCount;
-        existing.Status = result.IsSuccess ? EmailStatus.Sent : EmailStatus.Failed;
-        existing.SentAt = result.IsSuccess ? now : null;
-        existing.ProviderMessageId = result.IsSuccess ? result.Value.ProviderMessageId : null;
-        existing.LastError = Truncate(result.Error?.ToString());
 
         await db.SaveChangesAsync(ct);
     }

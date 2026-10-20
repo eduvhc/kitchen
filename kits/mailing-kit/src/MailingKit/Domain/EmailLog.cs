@@ -28,6 +28,18 @@ public class EmailLog
 
     public required string Subject { get; set; }
 
+    /// <summary>
+    /// The HTML body rendered on the first attempt, kept so a retry sends exactly what that attempt
+    /// sent. Cleared once the email is sent.
+    /// </summary>
+    public string? HtmlBody { get; set; }
+
+    /// <summary>
+    /// The plain-text body rendered on the first attempt, kept so a retry sends exactly what that
+    /// attempt sent. Cleared once the email is sent.
+    /// </summary>
+    public string? TextBody { get; set; }
+
     public string? TemplateKey { get; set; }
 
     public EmailStatus Status { get; set; }
