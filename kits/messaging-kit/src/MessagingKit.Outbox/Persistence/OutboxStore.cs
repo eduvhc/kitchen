@@ -93,7 +93,7 @@ public partial class OutboxStore<TContext>(TContext context, TimeProvider clock,
         ArgumentNullException.ThrowIfNull(message);
 
         var now = clock.GetUtcNow();
-        var exhausted = permanent || message.AttemptCount >= message.MaxAttempts;
+        var exhausted = message.IsExhaustedAfterFailure(permanent);
         var status = exhausted ? OutboxStatus.Dead : OutboxStatus.Pending;
         var scheduledAt = exhausted ? message.ScheduledAt : now.Add(retryDelay);
         var truncated = failure.Length > 4000 ? failure[..4000] : failure;

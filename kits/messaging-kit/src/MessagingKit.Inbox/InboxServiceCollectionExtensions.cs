@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace MessagingKit.Inbox;
 
@@ -28,14 +30,31 @@ public static class InboxServiceCollectionExtensions
         services.TryAddSingleton<MessageTypeRegistry>();
 
         services.TryAddSingleton<InboxSignal>();
-        services.TryAddScoped<IInbox, Inbox<TContext>>();
+
+        // IMeterFactory comes with a generic host; AddMetrics makes it exist without one too.
+        services.AddMetrics();
+        services.TryAddSingleton<InboxMetrics>();
+        services.TryAddScoped<IInboxBacklog, InboxBacklog<TContext>>();
+
+        // Factories, because the container only sees public constructors and the metrics are internal.
+        services.TryAddScoped<IInbox>(sp => new Inbox<TContext>(
+            sp.GetRequiredService<TContext>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<IOptions<InboxOptions>>(),
+            sp.GetRequiredService<InboxMetrics>()));
         services.TryAddScoped<IInboxStore, InboxStore<TContext>>();
 
         // Modules register their own inbox, so AddInbox runs once per module in a host. Guard the
         // processor or every module adds another one polling the same table.
         if (!services.Any(d => d.ServiceType == typeof(InboxProcessor)))
         {
-            services.AddSingleton<InboxProcessor>();
+            services.AddSingleton(sp => new InboxProcessor(
+                sp.GetRequiredService<IServiceScopeFactory>(),
+                sp.GetRequiredService<IOptions<InboxOptions>>(),
+                sp.GetRequiredService<InboxSignal>(),
+                sp.GetRequiredService<ILogger<InboxProcessor>>(),
+                sp.GetRequiredService<InboxMetrics>(),
+                sp.GetRequiredService<TimeProvider>()));
             services.AddHostedService(sp => sp.GetRequiredService<InboxProcessor>());
         }
 

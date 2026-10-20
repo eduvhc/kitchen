@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 
 namespace MessagingKit;
@@ -6,14 +7,26 @@ namespace MessagingKit;
 /// Carries W3C trace context across the outbox → transport → inbox hop, so a send and the handling
 /// that follows it land in one trace instead of two unrelated ones.
 /// </summary>
+/// <remarks>
+/// The names to subscribe to live on <see cref="MessagingKitInstrumentation"/>.
+/// </remarks>
 public static class MessagingDiagnostics
 {
-    public const string ActivitySourceName = "MessagingKit";
+    /// <summary>Kept for 0.2.x callers; the same value as <see cref="MessagingKitInstrumentation.ActivitySourceName"/>.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public const string ActivitySourceName = MessagingKitInstrumentation.ActivitySourceName;
 
+    /// <summary>The header the W3C <c>traceparent</c> of the staging caller is written to.</summary>
     public const string TraceParentHeader = "traceparent";
+
+    /// <summary>The header the W3C <c>tracestate</c> of the staging caller is written to, when there is one.</summary>
     public const string TraceStateHeader = "tracestate";
 
-    public static readonly ActivitySource ActivitySource = new(ActivitySourceName);
+    /// <summary>
+    /// The source every MessagingKit span starts on. Static and process-wide, like the BCL's own sources;
+    /// listeners subscribe by <see cref="MessagingKitInstrumentation.ActivitySourceName"/>.
+    /// </summary>
+    public static readonly ActivitySource ActivitySource = new(MessagingKitInstrumentation.ActivitySourceName);
 
     /// <summary>
     /// Writes the ambient trace context into the message headers. Called when the message is staged,
