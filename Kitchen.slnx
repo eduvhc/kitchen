@@ -10,6 +10,7 @@
     <Project Path="kits/messaging-kit/src/MessagingKit.Outbox/MessagingKit.Outbox.csproj" />
     <Project Path="kits/messaging-kit/src/MessagingKit.Testing/MessagingKit.Testing.csproj" />
     <Project Path="kits/messaging-kit/src/MessagingKit/MessagingKit.csproj" />
+    <Project Path="kits/resulting-kit/src/ResultingKit.AspNetCore/ResultingKit.AspNetCore.csproj" />
     <Project Path="kits/resulting-kit/src/ResultingKit/ResultingKit.csproj" />
     <Project Path="kits/testing-kit/src/TestingKit.AspNetCore/TestingKit.AspNetCore.csproj" />
     <Project Path="kits/testing-kit/src/TestingKit.Azurite/TestingKit.Azurite.csproj" />
@@ -29,6 +30,8 @@
     <Project Path="kits/messaging-kit/tests/MessagingKit.IntegrationTests/MessagingKit.IntegrationTests.csproj" />
     <Project Path="kits/messaging-kit/tests/MessagingKit.TestSupport/MessagingKit.TestSupport.csproj" />
     <Project Path="kits/messaging-kit/tests/MessagingKit.UnitTests/MessagingKit.UnitTests.csproj" />
+    <Project Path="kits/resulting-kit/tests/ResultingKit.AspNetCore.IntegrationTests/ResultingKit.AspNetCore.IntegrationTests.csproj" />
+    <Project Path="kits/resulting-kit/tests/ResultingKit.AspNetCore.UnitTests/ResultingKit.AspNetCore.UnitTests.csproj" />
     <Project Path="kits/resulting-kit/tests/ResultingKit.UnitTests/ResultingKit.UnitTests.csproj" />
     <Project Path="kits/testing-kit/tests/TestingKit.IntegrationTests/TestingKit.IntegrationTests.csproj" />
   </Folder>
