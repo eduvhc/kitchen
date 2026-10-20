@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.3.0](https://github.com/eduvhc/kitchen/compare/v0.2.4...v0.3.0) (2026-10-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* organise MailingKit by vertical slice ([#44](https://github.com/eduvhc/kitchen/issues/44))
+* organise MessagingKit and ResultingKit by vertical slice ([#43](https://github.com/eduvhc/kitchen/issues/43))
+* custom IMessageTransport and IEmailSender implementations must return ResultingKit results instead of TransportResult/SendResult.
+
+### refactor
+
+* organise MailingKit by vertical slice ([#44](https://github.com/eduvhc/kitchen/issues/44)) ([55a8d91](https://github.com/eduvhc/kitchen/commit/55a8d918969c194e03e5d6bd11e9425e33f138e4))
+* organise MessagingKit and ResultingKit by vertical slice ([#43](https://github.com/eduvhc/kitchen/issues/43)) ([c59640e](https://github.com/eduvhc/kitchen/commit/c59640e47022404323cbdb0180dd4c8e66e69e21))
+
+
+### Features
+
+* add MailingKit.Resend email sender ([#31](https://github.com/eduvhc/kitchen/issues/31)) ([7a00cce](https://github.com/eduvhc/kitchen/commit/7a00ccee420a403886e9a1e6e5ec5291b50d40c5))
+* add ResultingKit and use it for transport results ([#29](https://github.com/eduvhc/kitchen/issues/29)) ([8402d58](https://github.com/eduvhc/kitchen/commit/8402d58597297a0bfe5edd73609e0accd567893d))
+* add ResultingKit.AspNetCore for mapping results to HTTP responses ([#33](https://github.com/eduvhc/kitchen/issues/33)) ([3a0fd6b](https://github.com/eduvhc/kitchen/commit/3a0fd6b56dd3bba6eafda11d7c0acdc306c3871e))
+* add StoringKit for object storage on Azure Blob Storage and S3-compatible stores ([#40](https://github.com/eduvhc/kitchen/issues/40)) ([39fe7de](https://github.com/eduvhc/kitchen/commit/39fe7de6b62d3b7ebbe69731f74da457066d6831))
+* instrument MailingKit email sends with traces and metrics ([#36](https://github.com/eduvhc/kitchen/issues/36)) ([28e45ce](https://github.com/eduvhc/kitchen/commit/28e45ce03127d8bcdde36d471ca9f51bb86468ff))
+* instrument MessagingKit with OpenTelemetry-conventional traces and metrics ([#32](https://github.com/eduvhc/kitchen/issues/32)) ([fc02246](https://github.com/eduvhc/kitchen/commit/fc02246892e275deea88e88fe30bdebd6bf3d8bf))
+* make retried email sends idempotent ([#35](https://github.com/eduvhc/kitchen/issues/35)) ([af4588f](https://github.com/eduvhc/kitchen/commit/af4588fcd56d01a977ed62f7193cb93c6871a519))
+
+
+### Bug Fixes
+
+* resend the first attempt's content so a retry never changes the payload ([#39](https://github.com/eduvhc/kitchen/issues/39)) ([05e8f56](https://github.com/eduvhc/kitchen/commit/05e8f56025f85d144a2dce573dac9c8daad6eab4))
+
 ## [0.2.4](https://github.com/eduvhc/kitchen/compare/v0.2.3...v0.2.4) (2026-09-14)
 
 
