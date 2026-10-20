@@ -7,6 +7,7 @@ using MessagingKit;
 using Microsoft.EntityFrameworkCore;
 using MsOptions = Microsoft.Extensions.Options.Options;
 using Microsoft.Extensions.Time.Testing;
+using ResultingKit;
 
 namespace MailingKit.UnitTests;
 
@@ -81,7 +82,7 @@ public class SendEmailHandlerTests
     public async Task Records_a_failure_and_throws_so_the_inbox_retries()
     {
         await using var db = NewContext();
-        _sender.Behaviour = _ => SendResult.Transient("connection refused");
+        _sender.Behaviour = _ => Error.Transient("smtp.unavailable", "connection refused");
 
         var error = await Assert.ThrowsExactlyAsync<EmailSendException>(() => HandleAsync(db, new SendEmail
         {
@@ -102,7 +103,7 @@ public class SendEmailHandlerTests
     public async Task Marks_a_permanent_failure_as_such()
     {
         await using var db = NewContext();
-        _sender.Behaviour = _ => SendResult.Permanent("550 mailbox unavailable");
+        _sender.Behaviour = _ => Error.Failure("smtp.rejected", "550 mailbox unavailable");
 
         var error = await Assert.ThrowsExactlyAsync<EmailSendException>(() => HandleAsync(db, new SendEmail
         {

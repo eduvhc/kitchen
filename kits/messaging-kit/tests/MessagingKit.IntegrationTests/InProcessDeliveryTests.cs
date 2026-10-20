@@ -65,8 +65,8 @@ public class InProcessDeliveryTests : MessagingTest
         {
             var transport = scope.ServiceProvider.GetRequiredService<IMessageTransport>();
 
-            Assert.IsTrue((await transport.SendAsync(envelope)).Success);
-            Assert.IsTrue((await transport.SendAsync(envelope)).Success, "a duplicate is a successful delivery");
+            Assert.IsTrue((await transport.SendAsync(envelope)).IsSuccess);
+            Assert.IsTrue((await transport.SendAsync(envelope)).IsSuccess, "a duplicate is a successful delivery");
         }
 
         await host.DrainMessagingAsync(ct: CancellationToken.None);

@@ -1,6 +1,7 @@
 using MessagingKit.Inbox;
 using MessagingKit.Inbox.Abstractions;
 using Microsoft.Extensions.Logging;
+using ResultingKit;
 
 namespace MessagingKit.InProcess;
 
@@ -19,7 +20,7 @@ public sealed class InProcessTransport(
     InboxSignal signal,
     ILogger<InProcessTransport> logger) : IMessageTransport
 {
-    public async Task<TransportResult> SendAsync(MessageEnvelope envelope, CancellationToken ct = default)
+    public async Task<Result> SendAsync(MessageEnvelope envelope, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(envelope);
 
@@ -38,7 +39,7 @@ public sealed class InProcessTransport(
             }
 
             // A duplicate is a successful delivery — the receiver already has it.
-            return TransportResult.Ok();
+            return Result.Success();
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -47,7 +48,7 @@ public sealed class InProcessTransport(
         catch (Exception ex)
         {
             // Writing to the inbox failed, so the outbox row should be retried.
-            return TransportResult.Transient($"{ex.GetType().Name}: {ex.Message}");
+            return Error.Transient("inprocess.inbox_unavailable", $"{ex.GetType().Name}: {ex.Message}");
         }
     }
 }

@@ -127,18 +127,18 @@ public class OutboxDispatcher(
             var transport = resolver.Resolve(envelope);
             var result = await transport.SendAsync(envelope, ct);
 
-            if (result.Success)
+            if (result.IsSuccess)
             {
                 await store.MarkSentAsync(message, ct);
                 return;
             }
 
-            activity?.SetStatus(ActivityStatusCode.Error, result.Error);
+            activity?.SetStatus(ActivityStatusCode.Error, result.Error.Message);
 
             await store.MarkFailedAsync(
                 message,
-                result.Error ?? "Unknown transport failure",
-                result.IsPermanent,
+                result.Error.ToString(),
+                !result.Error.IsTransient,
                 BackoffFor(message.AttemptCount),
                 ct);
         }

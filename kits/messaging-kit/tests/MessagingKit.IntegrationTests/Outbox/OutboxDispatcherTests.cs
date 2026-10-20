@@ -4,6 +4,7 @@ using MessagingKit.IntegrationTests.Infrastructure;
 using MessagingKit.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using ResultingKit;
 
 namespace MessagingKit.IntegrationTests.Outbox;
 
@@ -32,7 +33,7 @@ public class OutboxDispatcherTests : MessagingTest
     [TestMethod]
     public async Task Reschedules_a_transient_failure_with_backoff()
     {
-        TestHost.Transport.Behaviour = _ => TransportResult.Transient("broker unreachable");
+        TestHost.Transport.Behaviour = _ => Error.Transient("broker.unreachable", "broker unreachable");
         await OutboxTests.AddAsync(new SendEmail("ada@example.com", "Retry me"));
 
         await RunAsync();
@@ -40,7 +41,7 @@ public class OutboxDispatcherTests : MessagingTest
         var stored = await StoredAsync();
         Assert.AreEqual(OutboxStatus.Pending, stored.Status);
         Assert.AreEqual(1, stored.AttemptCount);
-        Assert.AreEqual("broker unreachable", stored.LastError);
+        Assert.AreEqual("broker.unreachable: broker unreachable", stored.LastError);
         Assert.IsGreaterThan(TestHost.Clock.GetUtcNow(), stored.ScheduledAt);
 
         Assert.AreEqual(0, await RunAsync());
@@ -49,7 +50,7 @@ public class OutboxDispatcherTests : MessagingTest
     [TestMethod]
     public async Task Kills_a_permanent_failure_without_retrying()
     {
-        TestHost.Transport.Behaviour = _ => TransportResult.Permanent("unknown destination");
+        TestHost.Transport.Behaviour = _ => Error.Failure("broker.unknown_destination", "unknown destination");
         await OutboxTests.AddAsync(new SendEmail("ada@example.com", "Doomed"));
 
         await RunAsync();
@@ -61,7 +62,7 @@ public class OutboxDispatcherTests : MessagingTest
     [TestMethod]
     public async Task Retries_until_max_attempts_then_marks_dead()
     {
-        TestHost.Transport.Behaviour = _ => TransportResult.Transient("still down");
+        TestHost.Transport.Behaviour = _ => Error.Transient("broker.unreachable", "still down");
         await OutboxTests.AddAsync(new SendEmail("ada@example.com", "Persistent"));
 
         await WithDbAsync(async db =>
