@@ -2,7 +2,7 @@ using System.Net;
 using Amazon.S3.Model;
 using TestingKit.MSTest;
 
-namespace TestingKit.IntegrationTests;
+namespace TestingKit.IntegrationTests.Minio;
 
 [TestClass]
 public class MinioFixtureTests : IntegrationTest
