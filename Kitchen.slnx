@@ -12,9 +12,13 @@
     <Project Path="kits/messaging-kit/src/MessagingKit/MessagingKit.csproj" />
     <Project Path="kits/resulting-kit/src/ResultingKit.AspNetCore/ResultingKit.AspNetCore.csproj" />
     <Project Path="kits/resulting-kit/src/ResultingKit/ResultingKit.csproj" />
+    <Project Path="kits/storing-kit/src/StoringKit.Azure/StoringKit.Azure.csproj" />
+    <Project Path="kits/storing-kit/src/StoringKit.S3/StoringKit.S3.csproj" />
+    <Project Path="kits/storing-kit/src/StoringKit/StoringKit.csproj" />
     <Project Path="kits/testing-kit/src/TestingKit.AspNetCore/TestingKit.AspNetCore.csproj" />
     <Project Path="kits/testing-kit/src/TestingKit.Azurite/TestingKit.Azurite.csproj" />
     <Project Path="kits/testing-kit/src/TestingKit.EntityFramework/TestingKit.EntityFramework.csproj" />
+    <Project Path="kits/testing-kit/src/TestingKit.Minio/TestingKit.Minio.csproj" />
     <Project Path="kits/testing-kit/src/TestingKit.MSTest/TestingKit.MSTest.csproj" />
     <Project Path="kits/testing-kit/src/TestingKit.Postgres/TestingKit.Postgres.csproj" />
     <Project Path="kits/testing-kit/src/TestingKit.RabbitMq/TestingKit.RabbitMq.csproj" />
@@ -33,6 +37,10 @@
     <Project Path="kits/resulting-kit/tests/ResultingKit.AspNetCore.IntegrationTests/ResultingKit.AspNetCore.IntegrationTests.csproj" />
     <Project Path="kits/resulting-kit/tests/ResultingKit.AspNetCore.UnitTests/ResultingKit.AspNetCore.UnitTests.csproj" />
     <Project Path="kits/resulting-kit/tests/ResultingKit.UnitTests/ResultingKit.UnitTests.csproj" />
+    <Project Path="kits/storing-kit/tests/StoringKit.Azure.UnitTests/StoringKit.Azure.UnitTests.csproj" />
+    <Project Path="kits/storing-kit/tests/StoringKit.IntegrationTests/StoringKit.IntegrationTests.csproj" />
+    <Project Path="kits/storing-kit/tests/StoringKit.S3.UnitTests/StoringKit.S3.UnitTests.csproj" />
+    <Project Path="kits/storing-kit/tests/StoringKit.UnitTests/StoringKit.UnitTests.csproj" />
     <Project Path="kits/testing-kit/tests/TestingKit.IntegrationTests/TestingKit.IntegrationTests.csproj" />
   </Folder>
 </Solution>

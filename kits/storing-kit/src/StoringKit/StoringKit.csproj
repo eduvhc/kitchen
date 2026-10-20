@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Object storage as a contract: put, get, list and signed read URLs over any blob store, with typed results and built-in tracing and metrics.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../resulting-kit/src/ResultingKit/ResultingKit.csproj" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="StoringKit.Azure" />
+    <InternalsVisibleTo Include="StoringKit.S3" />
+    <InternalsVisibleTo Include="StoringKit.UnitTests" />
+  </ItemGroup>
+
+</Project>

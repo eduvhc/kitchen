@@ -1,3 +1,4 @@
+using TestingKit.Minio;
 using TestingKit.Postgres;
 using TestingKit.RabbitMq;
 using TestingKit.Smtp;
@@ -37,6 +38,15 @@ public static class TestHost
             QueuesToPurge = { Queue },
         });
 
+    public const string Bucket = "testingkit-bucket";
+
+    public static MinioFixture Minio { get; } = new(
+        clientOptions: new MinioClientOptions
+        {
+            Buckets = { Bucket },
+            BucketsToReset = { Bucket },
+        });
+
     [AssemblyInitialize]
     public static async Task InitializeAsync(TestContext context)
     {
@@ -48,6 +58,9 @@ public static class TestHost
 
         Environment
             .AddFixture(RabbitMq);
+
+        Environment
+            .AddFixture(Minio);
 
         Environment.AddSetting("ConnectionStrings:Postgres", () => Postgres.ConnectionString);
         Environment.AddSetting("ConnectionStrings:RabbitMq", () => RabbitMq.ConnectionString);
