@@ -196,27 +196,43 @@ modelBuilder.AddOutbox();   // messaging.outbox
 modelBuilder.AddInbox();    // messaging.inbox
 ```
 
-## Tracing
+## Telemetry
 
-Trace context is captured when a message is staged and carried in its headers, so the send and the handling that follows it belong to one trace rather than two unrelated ones. Subscribe to the source:
-
-```csharp
-builder.Services.AddOpenTelemetry().WithTracing(t => t
-    .AddSource(MessagingDiagnostics.ActivitySourceName)
-    .AddAspNetCoreInstrumentation());
-```
-
-You get a `send {type}` producer span at dispatch and a `handle {type}` consumer span at processing, both parented to whatever was active when the caller wrote the row — with the message id, type, and attempt number as tags, and failures marked as errors. Without this, an async boundary makes debugging strictly worse than a method call.
-
-## Metrics
-
-The dispatcher and processor report on a `System.Diagnostics.Metrics` meter named `MessagingKit` — the same name as the activity source, exposed as `MessagingDiagnostics.MeterName`. Subscribe to it alongside the traces:
+MessagingKit instruments itself the way ASP.NET Core and `HttpClient` do: spans on an `ActivitySource`, metrics on a `Meter` from the container's `IMeterFactory`, and nothing but `System.Diagnostics` underneath. No OpenTelemetry package is referenced; your host opts in by name:
 
 ```csharp
 builder.Services.AddOpenTelemetry()
-    .WithTracing(t => t.AddSource(MessagingDiagnostics.ActivitySourceName))
-    .WithMetrics(m => m.AddMeter(MessagingDiagnostics.MeterName));
+    .WithTracing(t => t.AddSource(MessagingKitInstrumentation.ActivitySourceName))
+    .WithMetrics(m => m.AddMeter(MessagingKitInstrumentation.MeterName));
 ```
+
+Names follow the current OpenTelemetry [messaging semantic conventions](https://opentelemetry.io/docs/specs/semconv/messaging/) where the meaning matches; everything MessagingKit-specific is under `messagingkit.`. `messaging.system` is always `messagingkit`.
+
+### Tracing
+
+Trace context is captured when a message is staged and carried in its headers, so the send and the handling that follows belong to the caller's trace rather than two unrelated ones.
+
+| Span | Kind | Started by |
+| --- | --- | --- |
+| `send {type}` | `Client` | the dispatcher, once per delivery attempt |
+| `process {type}` | `Consumer` | the processor, once per handling attempt — including rows it cannot dispatch |
+
+Both are parented to the context captured at staging. The send span is a `Client` rather than a `Producer` because it is not that creation context, which the conventions reserve `Producer` for. Spans are named by the message type: the conventions name them by destination, but a MessagingKit destination is whatever the caller passed, and span names must stay low-cardinality.
+
+| Attribute | On | Value |
+| --- | --- | --- |
+| `messaging.system` | both | `messagingkit` |
+| `messaging.operation.name` / `messaging.operation.type` | both | `send` / `send`, `process` / `process` |
+| `messaging.message.id` | both | the message id |
+| `messaging.destination.name` | send | the destination passed to `IOutbox.Add`, when there is one |
+| `messagingkit.message.type` | both | the wire name, e.g. `send-email` |
+| `messagingkit.message.attempt` | both | the attempt number, from 1 |
+| `messagingkit.outcome` | both | as on the metrics below |
+| `error.type` | failed attempts | as on the metrics below |
+
+A failed attempt also sets the span status to `Error` with the failure message, and a thrown exception is recorded as an `exception` event.
+
+### Metrics
 
 | Instrument | Type | Unit | Counts / measures |
 | --- | --- | --- | --- |
@@ -225,8 +241,10 @@ builder.Services.AddOpenTelemetry()
 | `messaging.client.consumed.messages` | Counter | `{message}` | One per inbox handling attempt, after its row is marked |
 | `messaging.process.duration` | Histogram | `s` | Wall time of that attempt: resolving the handler, running it, marking the row |
 | `messagingkit.inbox.received.messages` | Counter | `{message}` | One per `IInbox.TryStoreAsync` call that reached a verdict |
+| `messagingkit.outbox.messages` | ObservableUpDownCounter | `{message}` | Outbox rows by `messagingkit.message.status`: `pending` (waiting or in flight), `dead` |
+| `messagingkit.inbox.messages` | ObservableUpDownCounter | `{message}` | Inbox rows by `messagingkit.message.status`: `pending` (waiting or in flight), `dead` |
 
-Every instrument carries `messaging.system` = `messagingkit`, `messaging.message.type` (the wire name, as on the spans), and `messagingkit.outcome`:
+The first five carry `messagingkit.message.type` (the wire name, as on the spans) and `messagingkit.outcome`:
 
 | Instrument | `messagingkit.outcome` |
 | --- | --- |
@@ -240,9 +258,9 @@ The four semantic-convention instruments also carry `messaging.operation.name` a
 - the exception's full type name when one is thrown (the handler's own exception, not the reflection wrapper);
 - `unknown_message_type` or `no_handler` when the inbox cannot dispatch a row at all.
 
-Message ids and destinations are never tags — ids are unbounded, and a destination is whatever a caller passed. Durations are measured with `Stopwatch`, not the injected `TimeProvider`, so they stay real when tests fake the clock. Histograms advise the OpenTelemetry messaging buckets (5 ms to 10 s).
+Message ids and destinations are never metric tags — ids are unbounded, and a destination is whatever a caller passed. Durations are measured with `Stopwatch`, not the injected `TimeProvider`, so they stay real when tests fake the clock. Histograms advise the OpenTelemetry messaging buckets (5 ms to 10 s).
 
-There is no gauge for pending or dead rows. Nothing in the process knows the backlog without counting the table, and a `COUNT(*)` per scrape or poll on tables that grow until a retention job trims them is load the kit should not add silently. Query `status` on `messaging.outbox` / `messaging.inbox` from your database monitoring instead; a rising `dead` outcome rate is the in-process signal.
+**Backlog.** The two `messages` instruments report the last count the dispatcher or processor took on its own loop, at most once every `BacklogSampleIntervalSeconds` (default `30`, `0` turns it off), and only while something is subscribed to them. Collection reads the cached count and never touches the database; nothing is reported until the first count. A failed count is logged as a warning and the previous one kept. Every replica counts the same shared table, so aggregate these across instances with `max`, not `sum`.
 
 ## Compile-time checks
 
@@ -286,6 +304,7 @@ Both halves bind the same shape, under `Outbox` and `Inbox`:
 | `LockDurationSeconds` | `120` | Must exceed the slowest realistic delivery |
 | `MaxAttempts` | `10` | Then `Dead` |
 | `BaseRetryDelaySeconds` / `MaxRetryDelaySeconds` | `10` / `3600` | Doubles per attempt, capped |
+| `BacklogSampleIntervalSeconds` | `30` | How often, at most, the backlog instruments recount; `0` turns it off |
 
 ## Operational notes
 
@@ -320,7 +339,7 @@ dotnet test kits/messaging-kit/tests/MessagingKit.UnitTests     # no Docker need
 dotnet test kits/messaging-kit/tests/MessagingKit.IntegrationTests   # needs Docker
 ```
 
-`MessagingKit.UnitTests` covers naming, registration, signalling, startup validation, and the analyzer — no infrastructure, so it runs in about a second and parallelises.
+`MessagingKit.UnitTests` covers naming, registration, signalling, backlog sampling, startup validation, and the analyzer — no infrastructure, so it runs in about a second and parallelises.
 
 `MessagingKit.IntegrationTests` runs against a real PostgreSQL container using [TestingKit](../testing-kit), with a fake in-memory transport — the framework is transport-agnostic, so the tests need no broker. It is `[assembly: DoNotParallelize]`: the suite shares one database and resets between tests.
 

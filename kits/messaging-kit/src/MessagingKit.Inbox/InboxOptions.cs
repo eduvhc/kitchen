@@ -14,4 +14,12 @@ public class InboxOptions
     public int MaxAttempts { get; set; } = 10;
     public int BaseRetryDelaySeconds { get; set; } = 10;
     public int MaxRetryDelaySeconds { get; set; } = 3600;
+
+    /// <summary>
+    /// How often, at most, the processor counts pending and dead rows for the
+    /// <c>messagingkit.inbox.messages</c> instrument. The count runs on the processor's own loop and
+    /// only while something listens to that instrument; collection reads the last count. <c>0</c> or less
+    /// disables it.
+    /// </summary>
+    public int BacklogSampleIntervalSeconds { get; set; } = 30;
 }

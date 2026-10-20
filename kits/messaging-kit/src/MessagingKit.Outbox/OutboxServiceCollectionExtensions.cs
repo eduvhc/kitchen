@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace MessagingKit.Outbox;
 
@@ -29,6 +31,11 @@ public static class OutboxServiceCollectionExtensions
 
         services.TryAddSingleton<OutboxSignal>();
 
+        // IMeterFactory comes with a generic host; AddMetrics makes it exist without one too.
+        services.AddMetrics();
+        services.TryAddSingleton<OutboxMetrics>();
+        services.TryAddScoped<IOutboxBacklog, OutboxBacklog<TContext>>();
+
         services.TryAddScoped<IOutbox, Outbox<TContext>>();
         services.TryAddScoped<IOutboxStore, OutboxStore<TContext>>();
         services.TryAddScoped<IMessageTransportResolver, MessageTransportResolver>();
@@ -36,7 +43,14 @@ public static class OutboxServiceCollectionExtensions
         // Same reasoning as the inbox: several modules may each call AddOutbox in one host.
         if (!services.Any(d => d.ServiceType == typeof(OutboxDispatcher)))
         {
-            services.AddSingleton<OutboxDispatcher>();
+            // A factory, because the container only sees public constructors and the metrics are internal.
+            services.AddSingleton(sp => new OutboxDispatcher(
+                sp.GetRequiredService<IServiceScopeFactory>(),
+                sp.GetRequiredService<IOptions<OutboxOptions>>(),
+                sp.GetRequiredService<OutboxSignal>(),
+                sp.GetRequiredService<ILogger<OutboxDispatcher>>(),
+                sp.GetRequiredService<OutboxMetrics>(),
+                sp.GetRequiredService<TimeProvider>()));
             services.AddHostedService(sp => sp.GetRequiredService<OutboxDispatcher>());
         }
 
