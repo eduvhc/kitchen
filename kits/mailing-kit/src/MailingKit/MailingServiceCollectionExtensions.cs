@@ -16,7 +16,8 @@ public static class MailingServiceCollectionExtensions
     /// </summary>
     /// <remarks>
     /// A transport still has to be registered — add <c>MailingKit.Smtp</c> and call
-    /// <c>AddSmtpTransport()</c>, or supply your own <c>IEmailSender</c>.
+    /// <c>AddSmtpTransport()</c>, add <c>MailingKit.Resend</c> and call <c>AddResendTransport()</c>,
+    /// or supply your own <c>IEmailSender</c>.
     /// </remarks>
     public static IServiceCollection AddMailing<TContext>(
         this IServiceCollection services,

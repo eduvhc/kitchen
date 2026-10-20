@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="kits/mailing-kit/src/MailingKit.Resend/MailingKit.Resend.csproj" />
     <Project Path="kits/mailing-kit/src/MailingKit.Smtp/MailingKit.Smtp.csproj" />
     <Project Path="kits/mailing-kit/src/MailingKit/MailingKit.csproj" />
     <Project Path="kits/messaging-kit/src/MessagingKit.Abstractions/MessagingKit.Abstractions.csproj" />
@@ -23,6 +24,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="kits/mailing-kit/tests/MailingKit.IntegrationTests/MailingKit.IntegrationTests.csproj" />
+    <Project Path="kits/mailing-kit/tests/MailingKit.Resend.UnitTests/MailingKit.Resend.UnitTests.csproj" />
     <Project Path="kits/mailing-kit/tests/MailingKit.UnitTests/MailingKit.UnitTests.csproj" />
     <Project Path="kits/messaging-kit/tests/MessagingKit.IntegrationTests/MessagingKit.IntegrationTests.csproj" />
     <Project Path="kits/messaging-kit/tests/MessagingKit.TestSupport/MessagingKit.TestSupport.csproj" />
