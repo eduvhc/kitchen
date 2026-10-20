@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace MessagingKit;
+namespace MessagingKit.Abstractions;
 
 public sealed class JsonMessageSerializer(JsonSerializerOptions? options = null) : IMessageSerializer
 {

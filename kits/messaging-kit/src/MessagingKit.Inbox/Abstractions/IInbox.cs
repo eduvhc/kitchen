@@ -1,6 +1,6 @@
-using MessagingKit.Inbox.Domain;
+using MessagingKit.Abstractions;
 
-namespace MessagingKit.Inbox.Abstractions;
+namespace MessagingKit.Inbox;
 
 public interface IInbox
 {

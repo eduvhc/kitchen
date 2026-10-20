@@ -1,5 +1,4 @@
-using MessagingKit.Inbox.Abstractions;
-using MessagingKit.Inbox.Domain;
+using MessagingKit.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 

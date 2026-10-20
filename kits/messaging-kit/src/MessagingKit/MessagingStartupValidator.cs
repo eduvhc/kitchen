@@ -1,3 +1,4 @@
+using MessagingKit.Abstractions;
 using MessagingKit.InProcess;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;

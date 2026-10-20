@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using MessagingKit.Abstractions;
+using MessagingKit.Outbox;
 
 namespace MessagingKit.Inbox;
 

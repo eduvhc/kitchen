@@ -1,5 +1,5 @@
-using MessagingKit.Inbox.Persistence;
-using MessagingKit.Outbox.Persistence;
+using MessagingKit.Inbox;
+using MessagingKit.Outbox;
 using Microsoft.EntityFrameworkCore;
 
 namespace MessagingKit;

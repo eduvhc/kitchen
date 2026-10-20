@@ -1,8 +1,7 @@
 using System.Diagnostics.Metrics;
+using MessagingKit.Abstractions;
 using MessagingKit.Inbox;
-using MessagingKit.Inbox.Persistence;
 using MessagingKit.Outbox;
-using MessagingKit.Outbox.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.Metrics.Testing;
 using Microsoft.Extensions.Logging.Abstractions;

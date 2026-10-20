@@ -1,5 +1,4 @@
 using MessagingKit.Outbox;
-using MessagingKit.Outbox.Domain;
 using MessagingKit.IntegrationTests.Infrastructure;
 using MessagingKit.TestSupport;
 using Microsoft.EntityFrameworkCore;
@@ -85,7 +84,7 @@ public class OutboxDispatcherTests : MessagingTest
         await WithScopeAsync(async services =>
         {
             var db = services.GetRequiredService<TestDbContext>();
-            services.GetRequiredService<MessagingKit.Outbox.Abstractions.IOutbox>()
+            services.GetRequiredService<MessagingKit.Outbox.IOutbox>()
                 .Add(new SendEmail("ada@example.com", "Later"), sendAt: TestHost.Clock.GetUtcNow().AddHours(2));
             await db.SaveChangesAsync();
         });

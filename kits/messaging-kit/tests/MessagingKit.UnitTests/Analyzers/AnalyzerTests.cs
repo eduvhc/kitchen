@@ -1,10 +1,11 @@
 using System.Collections.Immutable;
+using MessagingKit.Abstractions;
 using MessagingKit.Analyzers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
 
-namespace MessagingKit.UnitTests;
+namespace MessagingKit.UnitTests.Analyzers;
 
 /// <summary>
 /// Compiles snippets in memory and runs the analyzer over them, so the rules are covered without
@@ -17,7 +18,7 @@ public class AnalyzerTests
     public async Task Flags_two_message_types_sharing_a_wire_name()
     {
         var diagnostics = await AnalyzeAsync("""
-            using MessagingKit;
+            using MessagingKit.Abstractions;
 
             [Message("duplicate")]
             public sealed record First(string Value);
@@ -38,7 +39,7 @@ public class AnalyzerTests
         var diagnostics = await AnalyzeAsync("""
             using System.Threading;
             using System.Threading.Tasks;
-            using MessagingKit;
+            using MessagingKit.Abstractions;
 
             public sealed record Orphan(string Value);
 
@@ -61,7 +62,7 @@ public class AnalyzerTests
         var diagnostics = await AnalyzeAsync("""
             using System.Threading;
             using System.Threading.Tasks;
-            using MessagingKit;
+            using MessagingKit.Abstractions;
             using Microsoft.Extensions.DependencyInjection;
 
             public sealed record Welcome(string Value);
@@ -86,7 +87,7 @@ public class AnalyzerTests
     public async Task Flags_an_empty_message_name()
     {
         var diagnostics = await AnalyzeAsync("""
-            using MessagingKit;
+            using MessagingKit.Abstractions;
 
             [Message("")]
             public sealed record Blank(string Value);
@@ -103,7 +104,7 @@ public class AnalyzerTests
         var diagnostics = await AnalyzeAsync("""
             using System.Threading;
             using System.Threading.Tasks;
-            using MessagingKit;
+            using MessagingKit.Abstractions;
 
             public sealed record Routed(string Value);
 
@@ -127,7 +128,7 @@ public class AnalyzerTests
     public async Task Reports_an_unpinned_message_name_only_when_the_rule_is_enabled()
     {
         const string Source = """
-            using MessagingKit;
+            using MessagingKit.Abstractions;
             using System.Threading;
             using System.Threading.Tasks;
 

@@ -1,5 +1,4 @@
-using MessagingKit.Outbox.Abstractions;
-using MessagingKit.Outbox.Domain;
+using MessagingKit.Outbox;
 using MessagingKit.IntegrationTests.Infrastructure;
 using MessagingKit.TestSupport;
 using Microsoft.EntityFrameworkCore;

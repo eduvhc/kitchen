@@ -1,3 +1,4 @@
+using MessagingKit.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MessagingKit.Outbox;

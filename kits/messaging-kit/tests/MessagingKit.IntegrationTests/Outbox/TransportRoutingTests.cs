@@ -1,6 +1,5 @@
+using MessagingKit.Abstractions;
 using MessagingKit.Outbox;
-using MessagingKit.Outbox.Abstractions;
-using MessagingKit.Outbox.Domain;
 using MessagingKit.Testing;
 using MessagingKit.IntegrationTests.Infrastructure;
 using MessagingKit.TestSupport;
@@ -8,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ResultingKit;
 
-namespace MessagingKit.IntegrationTests;
+namespace MessagingKit.IntegrationTests.Outbox;
 
 [TestClass]
 public class TransportRoutingTests : MessagingTest

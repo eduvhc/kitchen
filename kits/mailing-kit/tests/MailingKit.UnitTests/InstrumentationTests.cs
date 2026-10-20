@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using MailingKit.Diagnostics;
 using MailingKit.Transport;
-using MessagingKit;
+using MessagingKit.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;

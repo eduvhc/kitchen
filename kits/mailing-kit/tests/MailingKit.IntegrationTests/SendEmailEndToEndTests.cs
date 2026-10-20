@@ -1,7 +1,6 @@
 using MailingKit.Domain;
 using MailingKit.Templates;
-using MessagingKit.Outbox.Abstractions;
-using MessagingKit.Outbox.Domain;
+using MessagingKit.Outbox;
 using MessagingKit.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;

@@ -1,3 +1,4 @@
+using MessagingKit.Abstractions;
 using MessagingKit.Inbox;
 using MessagingKit.Outbox;
 using MessagingKit.TestSupport;

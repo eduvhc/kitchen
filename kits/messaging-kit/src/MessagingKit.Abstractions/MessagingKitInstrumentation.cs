@@ -1,4 +1,4 @@
-namespace MessagingKit;
+namespace MessagingKit.Abstractions;
 
 /// <summary>
 /// The names MessagingKit publishes its telemetry under. A host opts in by subscribing to both:

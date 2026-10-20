@@ -1,4 +1,4 @@
-namespace MessagingKit.Outbox.Domain;
+namespace MessagingKit.Outbox;
 
 public enum OutboxStatus
 {

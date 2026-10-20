@@ -1,4 +1,4 @@
-namespace MessagingKit;
+namespace MessagingKit.Abstractions;
 
 /// <summary>
 /// One transport routing rule. <see cref="Key"/> matches either a message's

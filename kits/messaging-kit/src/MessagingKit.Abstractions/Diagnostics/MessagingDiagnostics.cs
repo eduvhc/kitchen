@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 
-namespace MessagingKit;
+namespace MessagingKit.Abstractions;
 
 /// <summary>
 /// Carries W3C trace context across the outbox → transport → inbox hop, so a send and the handling

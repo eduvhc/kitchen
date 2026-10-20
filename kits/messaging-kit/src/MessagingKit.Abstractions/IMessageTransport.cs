@@ -1,6 +1,6 @@
 using ResultingKit;
 
-namespace MessagingKit;
+namespace MessagingKit.Abstractions;
 
 /// <summary>Delivers outbox messages to their destination, such as a broker or another module's inbox.</summary>
 public interface IMessageTransport

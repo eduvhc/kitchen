@@ -1,4 +1,4 @@
-namespace MessagingKit;
+namespace MessagingKit.Abstractions;
 
 public interface IMessageHandler<in TMessage>
 {

@@ -18,7 +18,7 @@
 
   <ItemGroup>
     <!-- One copy of the attribute names for both halves; the inbox does not reference the outbox. -->
-    <Compile Include="../MessagingKit.Outbox/MessagingTags.cs" Link="MessagingTags.cs" />
+    <Compile Include="../MessagingKit.Outbox/Diagnostics/MessagingTags.cs" Link="Diagnostics/MessagingTags.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,10 +1,9 @@
 using System.Text.Json;
-using MessagingKit.Inbox.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
-namespace MessagingKit.Inbox.Persistence;
+namespace MessagingKit.Inbox;
 
 public static class InboxModelBuilderExtensions
 {
