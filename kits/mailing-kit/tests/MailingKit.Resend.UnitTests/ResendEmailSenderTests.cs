@@ -33,6 +33,15 @@ public sealed class ResendEmailSenderTests : IDisposable
         TextBody = "Hi",
     };
 
+    private static OutgoingEmail WithKey(string key) => new()
+    {
+        IdempotencyKey = key,
+        FromAddress = "no-reply@example.com",
+        To = ["ada@example.com"],
+        Subject = "Hello",
+        TextBody = "Hi",
+    };
+
     private static OutgoingEmail Full() => new()
     {
         FromAddress = "billing@example.com",
@@ -110,7 +119,53 @@ public sealed class ResendEmailSenderTests : IDisposable
     }
 
     [TestMethod]
-    public async Task Sends_no_idempotency_key_because_the_email_carries_no_stable_id()
+    public async Task Sends_the_idempotency_key_as_a_header()
+    {
+        await CreateSender().SendAsync(WithKey("mailingkit-0123abcd"));
+
+        var headers = _handler.Requests.Single().Headers;
+        Assert.AreEqual("mailingkit-0123abcd", headers.GetValues("Idempotency-Key").Single());
+    }
+
+    [TestMethod]
+    public async Task A_retry_after_a_lost_response_sends_the_same_key()
+    {
+        var attempts = 0;
+        _handler.Respond = async (_, ct) =>
+        {
+            if (++attempts == 1)
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+            }
+
+            return FakeHttpHandler.Json(HttpStatusCode.OK, """{"id":"re_123"}""");
+        };
+
+        var sender = CreateSender(TimeSpan.FromMilliseconds(50));
+        var first = await sender.SendAsync(WithKey("mailingkit-0123abcd"));
+        var retry = await sender.SendAsync(WithKey("mailingkit-0123abcd"));
+
+        Assert.AreEqual(ErrorKind.Transient, first.Error!.Kind);
+        Assert.IsTrue(retry.IsSuccess);
+        CollectionAssert.AreEqual(
+            new[] { "mailingkit-0123abcd", "mailingkit-0123abcd" },
+            _handler.Requests.Select(r => r.Headers.GetValues("Idempotency-Key").Single()).ToArray());
+    }
+
+    [TestMethod]
+    public async Task Different_emails_send_different_keys()
+    {
+        var sender = CreateSender();
+        await sender.SendAsync(WithKey("mailingkit-a"));
+        await sender.SendAsync(WithKey("mailingkit-b"));
+
+        CollectionAssert.AreEqual(
+            new[] { "mailingkit-a", "mailingkit-b" },
+            _handler.Requests.Select(r => r.Headers.GetValues("Idempotency-Key").Single()).ToArray());
+    }
+
+    [TestMethod]
+    public async Task Sends_no_idempotency_key_when_the_email_has_none()
     {
         await CreateSender().SendAsync(Minimal());
 
