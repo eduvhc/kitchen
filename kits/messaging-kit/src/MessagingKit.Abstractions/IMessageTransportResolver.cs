@@ -1,4 +1,4 @@
-namespace MessagingKit;
+namespace MessagingKit.Abstractions;
 
 /// <summary>
 /// Picks the transport for an envelope. Lets one host route some message types in-process and

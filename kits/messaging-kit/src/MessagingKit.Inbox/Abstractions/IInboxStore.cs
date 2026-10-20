@@ -1,6 +1,5 @@
-using MessagingKit.Inbox.Domain;
 
-namespace MessagingKit.Inbox.Abstractions;
+namespace MessagingKit.Inbox;
 
 public interface IInboxStore
 {

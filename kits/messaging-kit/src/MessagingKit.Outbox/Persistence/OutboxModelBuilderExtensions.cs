@@ -1,10 +1,9 @@
 using System.Text.Json;
-using MessagingKit.Outbox.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
-namespace MessagingKit.Outbox.Persistence;
+namespace MessagingKit.Outbox;
 
 public static class OutboxModelBuilderExtensions
 {

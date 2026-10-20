@@ -1,4 +1,4 @@
-namespace MessagingKit;
+namespace MessagingKit.Abstractions;
 
 /// <summary>
 /// Pins the wire name of a message type. Without it the name is derived from the type name

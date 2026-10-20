@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 
-namespace MessagingKit;
+namespace MessagingKit.Abstractions;
 
 /// <summary>
 /// Registration a module can do without knowing the host's <c>DbContext</c>. The host calls

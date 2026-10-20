@@ -1,7 +1,7 @@
 using System.Reflection;
 using System.Text;
 
-namespace MessagingKit;
+namespace MessagingKit.Abstractions;
 
 /// <summary>
 /// Resolves the wire name of a message type: <see cref="MessageAttribute"/> when present, otherwise

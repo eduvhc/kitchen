@@ -10,8 +10,8 @@ namespace MessagingKit.Analyzers;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class MessagingWiringAnalyzer : DiagnosticAnalyzer
 {
-    private const string MessageAttribute = "MessagingKit.MessageAttribute";
-    private const string HandlerInterface = "MessagingKit.IMessageHandler`1";
+    private const string MessageAttribute = "MessagingKit.Abstractions.MessageAttribute";
+    private const string HandlerInterface = "MessagingKit.Abstractions.IMessageHandler`1";
 
     /// <summary>
     /// Methods that register a handler, as <c>&lt;TMessage, THandler&gt;</c>. Matched by name because

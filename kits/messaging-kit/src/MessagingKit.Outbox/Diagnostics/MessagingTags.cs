@@ -1,4 +1,4 @@
-namespace MessagingKit;
+namespace MessagingKit.Outbox;
 
 // Attribute names shared by spans and metrics on both halves. Compiled into the outbox and linked into
 // the inbox, so the two cannot spell a name differently. Names outside the messaging.* and error.*

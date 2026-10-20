@@ -1,9 +1,8 @@
 using System.Diagnostics.Metrics;
+using MessagingKit.Abstractions;
 using MessagingKit.Inbox;
-using MessagingKit.Inbox.Domain;
 using MessagingKit.IntegrationTests.Infrastructure;
 using MessagingKit.Outbox;
-using MessagingKit.Outbox.Domain;
 using MessagingKit.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;

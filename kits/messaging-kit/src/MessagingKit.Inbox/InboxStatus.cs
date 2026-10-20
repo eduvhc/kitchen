@@ -1,4 +1,4 @@
-namespace MessagingKit.Inbox.Domain;
+namespace MessagingKit.Inbox;
 
 public enum InboxStatus
 {

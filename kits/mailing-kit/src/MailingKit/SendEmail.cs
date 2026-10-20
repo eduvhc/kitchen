@@ -1,4 +1,4 @@
-using MessagingKit;
+using MessagingKit.Abstractions;
 
 namespace MailingKit;
 

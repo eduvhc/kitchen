@@ -1,18 +1,16 @@
-namespace MessagingKit.Outbox.Domain;
+namespace MessagingKit.Inbox;
 
-public class OutboxMessage
+public class InboxMessage
 {
-    public Guid Id { get; set; } = Guid.CreateVersion7();
+    public required Guid Id { get; set; }
 
     public required string Type { get; set; }
 
     public required string Payload { get; set; }
 
-    public string? Destination { get; set; }
-
     public Dictionary<string, string> Headers { get; set; } = [];
 
-    public OutboxStatus Status { get; set; } = OutboxStatus.Pending;
+    public InboxStatus Status { get; set; } = InboxStatus.Pending;
 
     public int AttemptCount { get; set; }
 
@@ -22,11 +20,11 @@ public class OutboxMessage
 
     public DateTimeOffset? LockedUntil { get; set; }
 
-    public DateTimeOffset? SentAt { get; set; }
+    public DateTimeOffset ReceivedAt { get; set; }
+
+    public DateTimeOffset? ProcessedAt { get; set; }
 
     public string? LastError { get; set; }
-
-    public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
 

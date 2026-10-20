@@ -1,4 +1,6 @@
-namespace MessagingKit.UnitTests;
+using MessagingKit.Abstractions;
+
+namespace MessagingKit.UnitTests.Abstractions;
 
 [TestClass]
 public class MessageNameTests

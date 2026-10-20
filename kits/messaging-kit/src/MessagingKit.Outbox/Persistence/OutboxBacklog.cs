@@ -1,7 +1,6 @@
-using MessagingKit.Outbox.Domain;
 using Microsoft.EntityFrameworkCore;
 
-namespace MessagingKit.Outbox.Persistence;
+namespace MessagingKit.Outbox;
 
 /// <summary>Counts the rows the dispatcher has not finished with, for the backlog instrument.</summary>
 internal interface IOutboxBacklog

@@ -1,6 +1,5 @@
+using MessagingKit.Abstractions;
 using MessagingKit.Inbox;
-using MessagingKit.Inbox.Abstractions;
-using MessagingKit.Inbox.Domain;
 using MessagingKit.IntegrationTests.Infrastructure;
 using MessagingKit.TestSupport;
 using Microsoft.EntityFrameworkCore;

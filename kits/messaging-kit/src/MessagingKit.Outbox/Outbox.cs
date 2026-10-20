@@ -1,5 +1,4 @@
-using MessagingKit.Outbox.Abstractions;
-using MessagingKit.Outbox.Domain;
+using MessagingKit.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 

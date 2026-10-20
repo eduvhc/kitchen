@@ -1,7 +1,5 @@
 using System.Diagnostics;
-using MessagingKit.Outbox.Abstractions;
-using MessagingKit.Outbox.Domain;
-using MessagingKit.Outbox.Persistence;
+using MessagingKit.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
