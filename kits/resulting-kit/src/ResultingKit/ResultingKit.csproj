@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <Description>Explicit success and failure: Result, Result&lt;T&gt;, and a typed Error that says whether retrying can help.</Description>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
 </Project>
