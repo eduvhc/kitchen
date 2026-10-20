@@ -21,7 +21,7 @@ What is left is the part that is actually about email.
 | Concern | Owner |
 | --- | --- |
 | Not losing the message | MessagingKit outbox |
-| Not sending it twice | MessagingKit inbox |
+| Not sending it twice | MessagingKit inbox, plus an idempotency key per send — see [Retries and duplicates](#retries-and-duplicates) |
 | Retry, backoff, dead-lettering | MessagingKit inbox |
 | Scheduling (`sendAt`) | MessagingKit outbox |
 | Templates, validation, SMTP | MailingKit |
@@ -174,9 +174,24 @@ new SendEmail
 
 Anything explicitly set wins over the template, which wins over `Defaults`.
 
-**No idempotency key, no `maxAttempts`, no `sendAt` on this type** — they would duplicate MessagingKit. The message id deduplicates, the inbox owns the retry ladder, and scheduling is `outbox.Add(message, sendAt: whenever)`.
+**No idempotency key, no `maxAttempts`, no `sendAt` on this type** — they would duplicate MessagingKit. The message id deduplicates — and becomes the provider's [idempotency key](#retries-and-duplicates) — the inbox owns the retry ladder, and scheduling is `outbox.Add(message, sendAt: whenever)`.
 
 Attachments travel inside the message payload, so keep them small; anything large belongs in object storage with a link.
+
+## Retries and duplicates
+
+The inbox makes sure a message is *handled* once, but a send can still be *attempted* more than once: if the provider accepts the email and its answer is lost to a timeout, the inbox sees a transient failure and retries. Without help from the provider, that retry delivers the email a second time.
+
+So the handler gives every send an `OutgoingEmail.IdempotencyKey` derived from the inbox message id — `mailingkit-` followed by the id's 32 hex digits. Every retry of the same message carries the same key, and two messages never share one, even with identical content. What a transport does with it:
+
+| Transport | Uses the key as | Effect on a retry after a lost response |
+| --- | --- | --- |
+| `MailingKit.Resend` | The `Idempotency-Key` request header | Resend returns the original email instead of sending another, for 24 hours |
+| `MailingKit.Smtp` | The `Message-ID`, as `<key>@<sender domain>` | Delivered again, but with the same `Message-ID`, so mail systems that deduplicate on it drop the copy |
+
+SMTP has no idempotency handshake, so the Message-ID is the best it can do; it also ties a delivered email back to its row in `messaging.inbox`. A `Message-ID` set through `Headers` wins. Sending through Resend's SMTP relay? Give the message a `Resend-Idempotency-Key` header of your own for the stronger guarantee.
+
+`IdempotencyKey` is null on an `OutgoingEmail` you build by hand, and a transport then sends without one.
 
 ## Templates
 
@@ -253,7 +268,7 @@ How Resend's answers reach the inbox:
 
 Error codes are `resend.` plus Resend's own error name — `resend.validation_error`, `resend.rate_limit_exceeded` — and the message is Resend's, prefixed with the status. A body that is not Resend's JSON (a proxy's HTML page, say) is kept as the message under `resend.http_<status>`.
 
-**No idempotency key is sent yet.** `OutgoingEmail` carries no stable id, so if Resend accepts an email but the response is lost to a timeout, the retry can deliver it twice.
+**Retries are idempotent.** Each request carries `OutgoingEmail.IdempotencyKey` as Resend's `Idempotency-Key` header, so a retry after a lost response returns the email Resend already accepted rather than sending a second one. Resend honours a key for 24 hours — far longer than the inbox's retry ladder — and accepts keys of up to 256 characters; MailingKit's are 43. A retry whose payload differs from the first attempt, because a template was edited in between, is rejected with `409 invalid_idempotent_request` and dead-lettered: the first attempt may already have been delivered, so check Resend before replaying it.
 
 ## Writing another transport
 
@@ -285,7 +300,7 @@ public sealed class AcmeMailSender(HttpClient http) : IEmailSender
 builder.Services.AddHttpClient<IEmailSender, AcmeMailSender>();   // instead of AddSmtpTransport()
 ```
 
-`OutgoingEmail` arrives fully resolved — templates rendered, recipients validated — so a transport only has to move bytes. Return an `Error.Transient` only for what retrying can fix; any other [ResultingKit](../resulting-kit) error kind is permanent, and the inbox dead-letters those instead of burning ten attempts on a malformed address. Let the caller's cancellation throw rather than turning it into an error. `MailingKit.Resend` is a complete, small example to copy from.
+`OutgoingEmail` arrives fully resolved — templates rendered, recipients validated — so a transport only has to move bytes. Return an `Error.Transient` only for what retrying can fix; any other [ResultingKit](../resulting-kit) error kind is permanent, and the inbox dead-letters those instead of burning ten attempts on a malformed address. Let the caller's cancellation throw rather than turning it into an error. If the provider supports idempotent sends, pass `email.IdempotencyKey` to it — it is what keeps a retry after a lost response from delivering twice. `MailingKit.Resend` is a complete, small example to copy from.
 
 ## The send log
 

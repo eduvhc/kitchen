@@ -171,6 +171,51 @@ public class SendEmailHandlerTests
     }
 
     [TestMethod]
+    public async Task A_retry_reuses_the_idempotency_key()
+    {
+        await using var db = NewContext();
+        var messageId = Guid.CreateVersion7();
+        var keys = new List<string?>();
+        _sender.Behaviour = email =>
+        {
+            keys.Add(email.IdempotencyKey);
+            // The provider accepted the first attempt, but its answer never arrived.
+            return keys.Count == 1 ? Error.Transient("resend.timeout", "no response") : new SendReceipt("provider-1");
+        };
+
+        var message = new SendEmail { To = ["ada@example.com"], Subject = "Hello", Text = "Hello" };
+
+        await Assert.ThrowsExactlyAsync<EmailSendException>(() => HandleAsync(db, message, messageId, attempt: 1));
+        await HandleAsync(db, message, messageId, attempt: 2);
+
+        Assert.HasCount(2, keys);
+        Assert.IsFalse(string.IsNullOrWhiteSpace(keys[0]));
+        Assert.AreEqual(keys[0], keys[1]);
+    }
+
+    [TestMethod]
+    public async Task Different_messages_get_different_idempotency_keys()
+    {
+        await using var db = NewContext();
+        var message = new SendEmail { To = ["ada@example.com"], Subject = "Hello", Text = "Hello" };
+
+        await HandleAsync(db, message);
+        await HandleAsync(db, message);
+
+        Assert.HasCount(2, _sender.Sent);
+        Assert.AreNotEqual(_sender.Sent[0].IdempotencyKey, _sender.Sent[1].IdempotencyKey);
+    }
+
+    [TestMethod]
+    public void The_idempotency_key_fits_every_provider_limit()
+    {
+        var key = SendEmailHandler<TestDbContext>.IdempotencyKeyFor(Guid.CreateVersion7());
+
+        Assert.IsLessThanOrEqualTo(64, key.Length);
+        StringAssert.Matches(key, new System.Text.RegularExpressions.Regex("^mailingkit-[0-9a-f]{32}$"));
+    }
+
+    [TestMethod]
     public async Task Rejects_a_message_with_no_recipients()
     {
         await using var db = NewContext();
