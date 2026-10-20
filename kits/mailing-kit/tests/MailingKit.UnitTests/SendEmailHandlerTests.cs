@@ -155,19 +155,126 @@ public class SendEmailHandlerTests
     }
 
     [TestMethod]
-    public async Task A_redelivered_message_updates_its_row_rather_than_adding_another()
+    public async Task A_retry_updates_its_row_rather_than_adding_another()
     {
         await using var db = NewContext();
         var messageId = Guid.CreateVersion7();
+        FailFirstAttempt();
 
         var message = new SendEmail { To = ["ada@example.com"], Subject = "Hello", Text = "Hello" };
 
-        await HandleAsync(db, message, messageId, attempt: 1);
+        await Assert.ThrowsExactlyAsync<EmailSendException>(() => HandleAsync(db, message, messageId, attempt: 1));
         await HandleAsync(db, message, messageId, attempt: 2);
 
         var log = await db.Set<EmailLog>().SingleAsync();
         Assert.AreEqual(2, log.AttemptCount);
-        Assert.HasCount(2, _sender.Sent, "the handler does not deduplicate; the inbox does");
+        Assert.AreEqual(EmailStatus.Sent, log.Status);
+    }
+
+    [TestMethod]
+    public async Task A_message_already_sent_is_not_sent_again()
+    {
+        await using var db = NewContext();
+        var messageId = Guid.CreateVersion7();
+        var message = new SendEmail { To = ["ada@example.com"], Subject = "Hello", Text = "Hello" };
+
+        await HandleAsync(db, message, messageId, attempt: 1);
+        // The inbox lost track of the success and ran the handler again.
+        await HandleAsync(db, message, messageId, attempt: 2);
+
+        Assert.HasCount(1, _sender.Attempts);
+        Assert.AreEqual(1, (await db.Set<EmailLog>().SingleAsync()).AttemptCount);
+    }
+
+    [TestMethod]
+    public async Task A_retry_sends_what_the_first_attempt_rendered_even_after_the_template_changed()
+    {
+        await using var db = NewContext();
+        var messageId = Guid.CreateVersion7();
+        _templates.Templates["welcome"] = Welcome("Welcome {{ name }}", "<p>Hi {{ name }}</p>");
+        FailFirstAttempt();
+
+        var message = new SendEmail
+        {
+            To = ["ada@example.com"],
+            Template = "welcome",
+            Model = new Dictionary<string, object?> { ["name"] = "Ada" },
+        };
+
+        await Assert.ThrowsExactlyAsync<EmailSendException>(() => HandleAsync(db, message, messageId, attempt: 1));
+
+        _templates.Templates["welcome"] = Welcome("Hello again {{ name }}", "<p>New copy for {{ name }}</p>");
+
+        await HandleAsync(db, message, messageId, attempt: 2);
+
+        var (first, retry) = (_sender.Attempts[0], _sender.Attempts[1]);
+        Assert.AreEqual("Welcome Ada", retry.Subject);
+        Assert.AreEqual(first.Subject, retry.Subject);
+        Assert.AreEqual(first.HtmlBody, retry.HtmlBody);
+        Assert.AreEqual(first.TextBody, retry.TextBody);
+        Assert.AreEqual(first.FromAddress, retry.FromAddress);
+        Assert.AreEqual(first.IdempotencyKey, retry.IdempotencyKey);
+    }
+
+    [TestMethod]
+    public async Task A_retry_sends_even_after_the_template_was_deactivated()
+    {
+        await using var db = NewContext();
+        var messageId = Guid.CreateVersion7();
+        _templates.Templates["welcome"] = Welcome("Welcome", "<p>Hi</p>");
+        FailFirstAttempt();
+
+        var message = new SendEmail { To = ["ada@example.com"], Template = "welcome" };
+
+        await Assert.ThrowsExactlyAsync<EmailSendException>(() => HandleAsync(db, message, messageId, attempt: 1));
+
+        _templates.Templates["welcome"].IsActive = false;
+
+        await HandleAsync(db, message, messageId, attempt: 2);
+
+        Assert.AreEqual("<p>Hi</p>", _sender.Sent.Single().HtmlBody);
+    }
+
+    [TestMethod]
+    public async Task Content_is_pinned_before_the_first_send()
+    {
+        await using var db = NewContext();
+        EmailLog? duringSend = null;
+        _sender.Behaviour = _ =>
+        {
+            // What a retry would find if the process died while the provider was answering.
+            duringSend = db.Set<EmailLog>().AsNoTracking().Single();
+            return new SendReceipt("provider-1");
+        };
+
+        await HandleAsync(db, new SendEmail { To = ["ada@example.com"], Subject = "Hello", Html = "<p>Hello</p>" });
+
+        Assert.IsNotNull(duringSend);
+        Assert.AreEqual("<p>Hello</p>", duringSend.HtmlBody);
+        Assert.AreEqual(EmailStatus.Failed, duringSend.Status);
+        Assert.AreEqual(SendEmailHandler<TestDbContext>.InterruptedError, duringSend.LastError);
+    }
+
+    [TestMethod]
+    public async Task Bodies_are_kept_while_failing_and_cleared_once_sent()
+    {
+        await using var db = NewContext();
+        var messageId = Guid.CreateVersion7();
+        FailFirstAttempt();
+
+        var message = new SendEmail { To = ["ada@example.com"], Subject = "Hello", Html = "<p>Hello</p>", Text = "Hello" };
+
+        await Assert.ThrowsExactlyAsync<EmailSendException>(() => HandleAsync(db, message, messageId, attempt: 1));
+
+        var failed = await db.Set<EmailLog>().AsNoTracking().SingleAsync();
+        Assert.AreEqual("<p>Hello</p>", failed.HtmlBody);
+        Assert.AreEqual("Hello", failed.TextBody);
+
+        await HandleAsync(db, message, messageId, attempt: 2);
+
+        var sent = await db.Set<EmailLog>().AsNoTracking().SingleAsync();
+        Assert.IsNull(sent.HtmlBody);
+        Assert.IsNull(sent.TextBody);
     }
 
     [TestMethod]
@@ -232,6 +339,19 @@ public class SendEmailHandlerTests
         await Assert.ThrowsExactlyAsync<ValidationException>(() =>
             HandleAsync(db, new SendEmail { To = ["ada@example.com"], Subject = "Hello" }));
     }
+
+    /// <summary>The provider accepts the first attempt, but its answer never arrives.</summary>
+    private void FailFirstAttempt() =>
+        _sender.Behaviour = _ => _sender.Attempts.Count == 1
+            ? Error.Transient("resend.timeout", "no response")
+            : new SendReceipt("provider-1");
+
+    private static EmailTemplate Welcome(string subject, string html) => new()
+    {
+        Key = "welcome",
+        SubjectTemplate = subject,
+        HtmlTemplate = html,
+    };
 
     private Task HandleAsync(TestDbContext db, SendEmail message, Guid? messageId = null, int attempt = 1)
     {
