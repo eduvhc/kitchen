@@ -17,12 +17,20 @@ namespace MailingKit.Resend;
 /// Timeouts, network failures, <c>429</c> and <c>5xx</c> come back as <see cref="ErrorKind.Transient"/>,
 /// so the inbox retries them. Every other rejection is permanent. Error codes are <c>resend.</c> followed
 /// by Resend's own error name, such as <c>resend.validation_error</c>.
+/// <para>
+/// <see cref="OutgoingEmail.IdempotencyKey"/> is sent as Resend's <c>Idempotency-Key</c> header, so a
+/// retry after a lost response returns the original email instead of sending a second one. Resend
+/// honours a key for 24 hours; a retry with the same key but a different payload (a template edited
+/// between attempts, say) is rejected with <c>409 invalid_idempotent_request</c>, which is permanent.
+/// </para>
 /// </remarks>
 /// <param name="http">A client whose base address is the Resend API root and which carries the API key.</param>
 /// <param name="logger">Logs each send and each failure.</param>
 public sealed class ResendEmailSender(HttpClient http, ILogger<ResendEmailSender> logger) : IEmailSender
 {
     private const int MaxRawBodyInMessage = 500;
+
+    internal const string IdempotencyKeyHeader = "Idempotency-Key";
 
     private static readonly SearchValues<char> Specials = SearchValues.Create("\"(),.:;<>@[\\]");
 
@@ -35,9 +43,17 @@ public sealed class ResendEmailSender(HttpClient http, ILogger<ResendEmailSender
 
         try
         {
-            using var response = await http
-                .PostAsJsonAsync("emails", Map(email), ResendJsonContext.Default.ResendEmailRequest, ct)
-                .ConfigureAwait(false);
+            using var request = new HttpRequestMessage(HttpMethod.Post, "emails")
+            {
+                Content = JsonContent.Create(Map(email), ResendJsonContext.Default.ResendEmailRequest),
+            };
+
+            if (!string.IsNullOrWhiteSpace(email.IdempotencyKey))
+            {
+                request.Headers.Add(IdempotencyKeyHeader, email.IdempotencyKey);
+            }
+
+            using var response = await http.SendAsync(request, ct).ConfigureAwait(false);
 
             var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
 

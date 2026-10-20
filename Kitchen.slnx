@@ -24,6 +24,7 @@
   <Folder Name="/tests/">
     <Project Path="kits/mailing-kit/tests/MailingKit.IntegrationTests/MailingKit.IntegrationTests.csproj" />
     <Project Path="kits/mailing-kit/tests/MailingKit.Resend.UnitTests/MailingKit.Resend.UnitTests.csproj" />
+    <Project Path="kits/mailing-kit/tests/MailingKit.Smtp.UnitTests/MailingKit.Smtp.UnitTests.csproj" />
     <Project Path="kits/mailing-kit/tests/MailingKit.UnitTests/MailingKit.UnitTests.csproj" />
     <Project Path="kits/messaging-kit/tests/MessagingKit.IntegrationTests/MessagingKit.IntegrationTests.csproj" />
     <Project Path="kits/messaging-kit/tests/MessagingKit.TestSupport/MessagingKit.TestSupport.csproj" />

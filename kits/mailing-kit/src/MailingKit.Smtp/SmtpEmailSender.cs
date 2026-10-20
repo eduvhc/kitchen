@@ -1,3 +1,6 @@
+using System.Buffers;
+using System.Security.Cryptography;
+using System.Text;
 using MailingKit.Domain;
 using Microsoft.Extensions.Logging;
 using MailingKit.Transport;
@@ -10,6 +13,9 @@ namespace MailingKit.Smtp;
 
 public class SmtpEmailSender(IOptions<SmtpOptions> options, ILogger<SmtpEmailSender> logger) : IEmailSender
 {
+    private static readonly SearchValues<char> AtomChars =
+        SearchValues.Create("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!#$%&'*+-/=?^_`{|}~.");
+
     private readonly SmtpOptions _options = options.Value;
 
     public async Task<Result<SendReceipt>> SendAsync(OutgoingEmail email, CancellationToken ct = default)
@@ -72,10 +78,32 @@ public class SmtpEmailSender(IOptions<SmtpOptions> options, ILogger<SmtpEmailSen
         }
     }
 
+    /// <summary>
+    /// <c>key@domain</c>, with the key used as-is when it is a valid <c>dot-atom</c> and hashed otherwise,
+    /// so any key yields a well-formed id.
+    /// </summary>
+    internal static string DeterministicMessageId(string key, string domain)
+    {
+        var left = IsDotAtom(key)
+            ? key
+            : Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(key)));
+
+        return $"{left}@{(string.IsNullOrWhiteSpace(domain) ? "localhost" : domain)}";
+    }
+
+    private static bool IsDotAtom(string value) =>
+        value.Length > 0
+        && !value.AsSpan().ContainsAnyExcept(AtomChars)
+        && value[0] != '.' && value[^1] != '.'
+        && !value.Contains("..", StringComparison.Ordinal);
+
+    private static bool HasHeader(Dictionary<string, string> headers, string name) =>
+        headers.Keys.Any(k => string.Equals(k, name, StringComparison.OrdinalIgnoreCase));
+
     private static bool IsPermanent(SmtpCommandException ex) =>
         (int)ex.StatusCode >= 500 && (int)ex.StatusCode < 600;
 
-    private static MimeMessage Build(OutgoingEmail message)
+    internal static MimeMessage Build(OutgoingEmail message)
     {
         var mime = new MimeMessage();
         mime.From.Add(new MailboxAddress(message.FromName ?? string.Empty, message.FromAddress));
@@ -105,6 +133,14 @@ public class SmtpEmailSender(IOptions<SmtpOptions> options, ILogger<SmtpEmailSen
         foreach (var (name, value) in message.Headers)
         {
             mime.Headers.Add(name, value);
+        }
+
+        // SMTP has no idempotency handshake. A Message-ID that repeats across retries is the closest
+        // thing: receiving systems that deduplicate on it drop the second copy, and it ties the
+        // delivered email back to its inbox message.
+        if (!string.IsNullOrWhiteSpace(message.IdempotencyKey) && !HasHeader(message.Headers, "Message-ID"))
+        {
+            mime.MessageId = DeterministicMessageId(message.IdempotencyKey, mime.From.Mailboxes.First().Domain);
         }
 
         var builder = new BodyBuilder
