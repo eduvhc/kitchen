@@ -43,6 +43,17 @@ dotnet add package MailingKit.Smtp      # or MailingKit.Resend
 
 Each transport is its own package, so a host on Resend never pulls in MailKit and a host on SMTP never pulls in `Microsoft.Extensions.Http`. Register exactly one.
 
+`MailingKit` is organised by feature, and each feature is one namespace:
+
+| Namespace | Contents |
+| --- | --- |
+| `MailingKit` | `AddMailing`, `MailingOptions`, `MailingKitInstrumentation` |
+| `MailingKit.Sending` | `SendEmail`, `IEmailSender`, `OutgoingEmail`, `SendReceipt`, `Attachment`, `EmailDefaultsOptions`, the exceptions |
+| `MailingKit.Templates` | `ITemplateStore`, `IWritableTemplateStore`, `ITemplateRenderer`, `EmailTemplate`, `TemplateOptions`, `modelBuilder.AddEmailTemplates()` |
+| `MailingKit.SendLog` | `EmailLog`, `EmailStatus`, `modelBuilder.AddMailing()` |
+
+The transports keep their own namespaces, `MailingKit.Smtp` and `MailingKit.Resend`.
+
 ## Quick start
 
 Everything below is complete — copy it, point the connection string at your database, and it runs.
@@ -52,7 +63,8 @@ Everything below is complete — copy it, point the connection string at your da
 Both kits map their tables into the context you already own, so `dotnet ef migrations add` picks them up in your own migration history. Neither package ships migrations.
 
 ```csharp
-using MailingKit.Persistence;
+using MailingKit.SendLog;
+using MailingKit.Templates;
 using MessagingKit;
 using Microsoft.EntityFrameworkCore;
 
@@ -119,8 +131,8 @@ dotnet ef database update
 Inject `IOutbox` wherever the email is a consequence of work you are already doing:
 
 ```csharp
-using MailingKit;
-using MessagingKit.Outbox.Abstractions;
+using MailingKit.Sending;
+using MessagingKit.Outbox;
 
 public sealed class InvoiceService(AppDbContext db, IOutbox outbox)
 {
@@ -192,6 +204,10 @@ So the handler gives every send an `OutgoingEmail.IdempotencyKey` derived from t
 SMTP has no idempotency handshake, so the Message-ID is the best it can do; it also ties a delivered email back to its row in `messaging.inbox`. A `Message-ID` set through `Headers` wins. Sending through Resend's SMTP relay? Give the message a `Resend-Idempotency-Key` header of your own for the stronger guarantee.
 
 `IdempotencyKey` is null on an `OutgoingEmail` you build by hand, and a transport then sends without one.
+
+**A retry sends exactly what the first attempt sent.** Before its first send, the handler saves the rendered subject, sender, Reply-To and bodies on the message's send-log row, and every retry sends from that row instead of rendering again. A template edited, deactivated or deleted between attempts, or a changed `Defaults` value, cannot change the payload — which matters because Resend rejects a reused key with a different payload (`409 invalid_idempotent_request`), and a dead letter there would mean an email that was probably delivered and is logged as failed. The bodies are cleared once the email is sent.
+
+A message whose row already says `Sent` is not sent again, which covers the inbox running a handler a second time after failing to record its success.
 
 ## Templates
 
@@ -268,14 +284,14 @@ How Resend's answers reach the inbox:
 
 Error codes are `resend.` plus Resend's own error name — `resend.validation_error`, `resend.rate_limit_exceeded` — and the message is Resend's, prefixed with the status. A body that is not Resend's JSON (a proxy's HTML page, say) is kept as the message under `resend.http_<status>`.
 
-**Retries are idempotent.** Each request carries `OutgoingEmail.IdempotencyKey` as Resend's `Idempotency-Key` header, so a retry after a lost response returns the email Resend already accepted rather than sending a second one. Resend honours a key for 24 hours — far longer than the inbox's retry ladder — and accepts keys of up to 256 characters; MailingKit's are 43. A retry whose payload differs from the first attempt, because a template was edited in between, is rejected with `409 invalid_idempotent_request` and dead-lettered: the first attempt may already have been delivered, so check Resend before replaying it.
+**Retries are idempotent.** Each request carries `OutgoingEmail.IdempotencyKey` as Resend's `Idempotency-Key` header, so a retry after a lost response returns the email Resend already accepted rather than sending a second one. Resend honours a key for 24 hours — far longer than the inbox's retry ladder — and accepts keys of up to 256 characters; MailingKit's are 43. Retries resend the content [pinned on the first attempt](#retries-and-duplicates), so the payload matches and Resend's `409 invalid_idempotent_request` — same key, different payload — cannot come from a template edit.
 
 ## Writing another transport
 
 Implement one method:
 
 ```csharp
-using MailingKit.Transport;
+using MailingKit.Sending;
 using ResultingKit;
 
 public sealed class AcmeMailSender(HttpClient http) : IEmailSender
@@ -304,7 +320,7 @@ builder.Services.AddHttpClient<IEmailSender, AcmeMailSender>();   // instead of 
 
 ## The send log
 
-`email.email_log` records one row per message: recipients, subject, template, outcome, the provider's message id, and the error if there was one. It is **not** a queue — no status machine, no locking, no `Queued` state. Anything still in flight lives in `messaging.inbox`.
+`email.email_log` records one row per message: recipients, subject, template, outcome, the provider's message id, and the error if there was one. Until the email is sent, it also holds the rendered bodies, so a retry can send them again unchanged. It is **not** a queue — no status machine, no locking, no `Queued` state. Anything still in flight lives in `messaging.inbox`.
 
 ```sql
 select to_addresses, subject, status, provider_message_id, last_error
@@ -313,7 +329,7 @@ where created_at > now() - interval '1 day'
 order by created_at desc;
 ```
 
-Keyed unique on `message_id`, so a redelivered message updates its row rather than adding a second one.
+Keyed unique on `message_id`, so a redelivered message updates its row rather than adding a second one. The row is written just before the first send, as `Failed` with `last_error` saying the attempt was interrupted; the outcome overwrites that, so a row still showing it means the process died while the provider was answering.
 
 ## Observability
 
@@ -378,6 +394,10 @@ SMTP settings live on `AddSmtpTransport`: `Host`, `Port`, `Security`, `Username`
 `MessagingKit.Testing` drives both halves to completion, so a test asserts on the email rather than sleeping:
 
 ```csharp
+using MailingKit.Sending;
+using MailingKit.SendLog;
+using MessagingKit.Testing;
+
 outbox.Add(new SendEmail { To = ["ada@example.com"], Subject = "Hi", Text = "Hi" });
 await db.SaveChangesAsync();
 
@@ -402,6 +422,6 @@ They are `[assembly: DoNotParallelize]` — they share one database and reset be
 - **Delivery is prompt, not instant.** Committing wakes the outbox dispatcher and storing to the inbox wakes the processor, so a message does not sit out the poll interval. The interval is the fallback.
 - **A failed send throws.** `EmailSendException` carries `IsPermanent`, and the inbox decides whether to retry or dead-letter. Nothing here retries.
 - **The send log grows forever.** Add a retention job that deletes old `Sent` rows past your audit window, and keep `Failed` until someone has looked at them.
-- **Bodies are not stored**, only metadata. If you need to reproduce exactly what a customer received, keep the template versioned.
+- **Bodies are not kept once sent.** They stay on the row only until the send succeeds, and on `Failed` rows until you delete them. If you need to reproduce exactly what a customer received, keep the template versioned.
 - **There is no suppression list.** Nothing tracks hard bounces, so a dead address is retried on every send. Add one before sending at volume — it is how a sending domain gets blocklisted.
 - **Set `AllowedRecipientDomains` outside production.** It is the cheapest guard against a staging run mailing real customers.

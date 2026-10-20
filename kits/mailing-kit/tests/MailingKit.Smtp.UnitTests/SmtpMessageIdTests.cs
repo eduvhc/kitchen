@@ -1,4 +1,4 @@
-using MailingKit.Transport;
+using MailingKit.Sending;
 
 namespace MailingKit.Smtp.UnitTests;
 

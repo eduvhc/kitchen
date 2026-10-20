@@ -1,10 +1,8 @@
 using System.Text.RegularExpressions;
-using MessagingKit.Outbox.Abstractions;
-using MessagingKit.Outbox.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
-namespace MessagingKit.Outbox.Persistence;
+namespace MessagingKit.Outbox;
 
 public partial class OutboxStore<TContext>(TContext context, TimeProvider clock, IOptions<OutboxOptions> options) : IOutboxStore
     where TContext : DbContext

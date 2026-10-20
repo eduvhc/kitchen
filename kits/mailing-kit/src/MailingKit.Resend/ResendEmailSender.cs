@@ -2,7 +2,7 @@ using System.Buffers;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using MailingKit.Transport;
+using MailingKit.Sending;
 using Microsoft.Extensions.Logging;
 using ResultingKit;
 
@@ -20,8 +20,9 @@ namespace MailingKit.Resend;
 /// <para>
 /// <see cref="OutgoingEmail.IdempotencyKey"/> is sent as Resend's <c>Idempotency-Key</c> header, so a
 /// retry after a lost response returns the original email instead of sending a second one. Resend
-/// honours a key for 24 hours; a retry with the same key but a different payload (a template edited
-/// between attempts, say) is rejected with <c>409 invalid_idempotent_request</c>, which is permanent.
+/// honours a key for 24 hours. A retry with the same key but a different payload is rejected with
+/// <c>409 invalid_idempotent_request</c>, which is permanent; MailingKit's handler avoids it by resending
+/// the content it rendered on the first attempt.
 /// </para>
 /// </remarks>
 /// <param name="http">A client whose base address is the Resend API root and which carries the API key.</param>

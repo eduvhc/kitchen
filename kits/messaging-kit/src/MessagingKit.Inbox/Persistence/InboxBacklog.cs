@@ -1,7 +1,6 @@
-using MessagingKit.Inbox.Domain;
 using Microsoft.EntityFrameworkCore;
 
-namespace MessagingKit.Inbox.Persistence;
+namespace MessagingKit.Inbox;
 
 /// <summary>Counts the rows the processor has not finished with, for the backlog instrument.</summary>
 internal interface IInboxBacklog

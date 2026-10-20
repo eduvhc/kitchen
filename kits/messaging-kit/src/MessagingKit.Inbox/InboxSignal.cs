@@ -1,3 +1,5 @@
+using MessagingKit.Abstractions;
+
 namespace MessagingKit.Inbox;
 
 /// <summary>Pulsed when a message is stored in the inbox.</summary>

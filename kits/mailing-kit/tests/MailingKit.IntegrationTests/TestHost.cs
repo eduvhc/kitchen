@@ -1,5 +1,6 @@
 using MailingKit;
-using MailingKit.Persistence;
+using MailingKit.SendLog;
+using MailingKit.Templates;
 using MailingKit.Smtp;
 using MessagingKit;
 using Microsoft.EntityFrameworkCore;

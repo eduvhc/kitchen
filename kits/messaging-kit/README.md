@@ -24,16 +24,16 @@ Outbox means *don't lose it*. Inbox means *don't do it twice*. A broker replaces
 
 ## Packages
 
-| Package | Contents |
-| --- | --- |
-| `MessagingKit` | `AddMessaging()` — outbox, inbox, and in-process delivery in one registration |
-| `MessagingKit.Abstractions` | `MessageEnvelope`, `IMessageTransport`, `IMessageHandler<T>`, serializer, type registry |
-| `MessagingKit.Outbox` | `IOutbox.Add`, EF model config, `SKIP LOCKED` dispatcher, retry and dead-lettering |
-| `MessagingKit.Inbox` | durable deduplication, background processor, handler dispatch, retry and dead-lettering |
-| `MessagingKit.InProcess` | `InProcessTransport` — delivers outbox rows straight into the inbox |
-| `MessagingKit.Testing` | `DrainMessagingAsync()` — run both halves to completion inside a test |
+| Package | Namespace | Contents |
+| --- | --- | --- |
+| `MessagingKit` | `MessagingKit` | `AddMessaging()` — outbox, inbox, and in-process delivery in one registration |
+| `MessagingKit.Abstractions` | `MessagingKit.Abstractions` | `MessageEnvelope`, `IMessageTransport`, `IMessageHandler<T>`, serializer, type registry |
+| `MessagingKit.Outbox` | `MessagingKit.Outbox` | `IOutbox.Add`, EF model config, `SKIP LOCKED` dispatcher, retry and dead-lettering |
+| `MessagingKit.Inbox` | `MessagingKit.Inbox` | durable deduplication, background processor, handler dispatch, retry and dead-lettering |
+| `MessagingKit.InProcess` | `MessagingKit.InProcess` | `InProcessTransport` — delivers outbox rows straight into the inbox |
+| `MessagingKit.Testing` | `MessagingKit.Testing` | `DrainMessagingAsync()` — run both halves to completion inside a test |
 
-Take `MessagingKit` for the whole thing, or the halves on their own if you only send or only receive.
+Take `MessagingKit` for the whole thing, or the halves on their own if you only send or only receive. Each package is one namespace, so one `using` per package brings in everything it exposes: the contracts (`IMessageHandler<T>`, `[Message]`, `AddMessageHandler`, `MessagingKitInstrumentation`) are in `MessagingKit.Abstractions`, and the outbox's `IOutbox`, `OutboxMessage` and `OutboxOptions` are all in `MessagingKit.Outbox`.
 
 ## Modules
 
@@ -203,6 +203,8 @@ modelBuilder.AddInbox();    // messaging.inbox
 MessagingKit instruments itself the way ASP.NET Core and `HttpClient` do: spans on an `ActivitySource`, metrics on a `Meter` from the container's `IMeterFactory`, and nothing but `System.Diagnostics` underneath. No OpenTelemetry package is referenced; your host opts in by name:
 
 ```csharp
+using MessagingKit.Abstractions;
+
 builder.Services.AddOpenTelemetry()
     .WithTracing(t => t.AddSource(MessagingKitInstrumentation.ActivitySourceName))
     .WithMetrics(m => m.AddMeter(MessagingKitInstrumentation.MeterName));

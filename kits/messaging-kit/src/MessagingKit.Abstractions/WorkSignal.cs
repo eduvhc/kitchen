@@ -1,4 +1,4 @@
-namespace MessagingKit;
+namespace MessagingKit.Abstractions;
 
 /// <summary>
 /// Lets a background loop wake as soon as there is work instead of waiting out its poll interval.

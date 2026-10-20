@@ -1,5 +1,5 @@
+using MessagingKit.Abstractions;
 using MessagingKit.Inbox;
-using MessagingKit.Inbox.Abstractions;
 using Microsoft.Extensions.Logging;
 using ResultingKit;
 

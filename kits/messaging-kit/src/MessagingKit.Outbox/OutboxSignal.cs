@@ -1,3 +1,5 @@
+using MessagingKit.Abstractions;
+
 namespace MessagingKit.Outbox;
 
 /// <summary>Pulsed when a transaction commits new outbox rows.</summary>

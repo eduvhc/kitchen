@@ -1,4 +1,3 @@
-using MailingKit.Templates;
 using Microsoft.EntityFrameworkCore;
 
 namespace MailingKit.Templates;

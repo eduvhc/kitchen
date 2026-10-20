@@ -1,6 +1,6 @@
-using MessagingKit.Inbox.Abstractions;
-using MessagingKit.Inbox.Domain;
-using MessagingKit.Outbox.Abstractions;
+using MessagingKit.Abstractions;
+using MessagingKit.Inbox;
+using MessagingKit.Outbox;
 using MessagingKit.Testing;
 using MessagingKit.IntegrationTests.Infrastructure;
 using MessagingKit.TestSupport;

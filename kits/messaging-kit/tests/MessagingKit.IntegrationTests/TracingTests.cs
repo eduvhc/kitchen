@@ -1,11 +1,9 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using MessagingKit.Abstractions;
 using MessagingKit.Inbox;
-using MessagingKit.Inbox.Abstractions;
 using MessagingKit.IntegrationTests.Infrastructure;
 using MessagingKit.Outbox;
-using MessagingKit.Outbox.Abstractions;
-using MessagingKit.Outbox.Domain;
 using MessagingKit.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;

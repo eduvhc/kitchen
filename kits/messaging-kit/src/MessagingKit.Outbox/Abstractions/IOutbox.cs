@@ -1,6 +1,5 @@
-using MessagingKit.Outbox.Domain;
 
-namespace MessagingKit.Outbox.Abstractions;
+namespace MessagingKit.Outbox;
 
 public interface IOutbox
 {

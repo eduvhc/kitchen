@@ -1,5 +1,4 @@
-using MessagingKit.Inbox.Abstractions;
-using MessagingKit.Inbox.Persistence;
+using MessagingKit.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

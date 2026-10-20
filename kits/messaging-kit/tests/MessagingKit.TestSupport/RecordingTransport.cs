@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using MessagingKit.Abstractions;
 using ResultingKit;
 
 namespace MessagingKit.TestSupport;
