@@ -1,4 +1,5 @@
-using MailingKit.Persistence;
+using MailingKit.SendLog;
+using MailingKit.Templates;
 using Microsoft.EntityFrameworkCore;
 
 namespace MailingKit.UnitTests;

@@ -1,7 +1,6 @@
 using System.Net;
 using System.Text.Json;
-using MailingKit.Domain;
-using MailingKit.Transport;
+using MailingKit.Sending;
 using Microsoft.Extensions.Logging.Abstractions;
 using ResultingKit;
 

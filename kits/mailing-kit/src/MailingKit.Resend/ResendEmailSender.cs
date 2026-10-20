@@ -2,7 +2,7 @@ using System.Buffers;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using MailingKit.Transport;
+using MailingKit.Sending;
 using Microsoft.Extensions.Logging;
 using ResultingKit;
 

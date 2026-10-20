@@ -1,4 +1,4 @@
-using MailingKit.Options;
+using MailingKit.Sending;
 using Microsoft.Extensions.Options;
 
 namespace MailingKit.Templates;
