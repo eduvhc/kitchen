@@ -1,7 +1,7 @@
 using System.Net.Mail;
 using TestingKit.MSTest;
 
-namespace TestingKit.IntegrationTests;
+namespace TestingKit.IntegrationTests.Smtp;
 
 [TestClass]
 public class SmtpFixtureTests : IntegrationTest

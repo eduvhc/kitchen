@@ -1,7 +1,7 @@
 using TestingKit.MSTest;
 using TestingKit.RabbitMq;
 
-namespace TestingKit.IntegrationTests;
+namespace TestingKit.IntegrationTests.RabbitMq;
 
 [TestClass]
 public class RabbitMqFixtureTests : IntegrationTest

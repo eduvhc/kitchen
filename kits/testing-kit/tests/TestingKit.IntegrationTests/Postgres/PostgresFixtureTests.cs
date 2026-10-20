@@ -1,7 +1,7 @@
 using Npgsql;
 using TestingKit.MSTest;
 
-namespace TestingKit.IntegrationTests;
+namespace TestingKit.IntegrationTests.Postgres;
 
 [TestClass]
 public class PostgresFixtureTests : IntegrationTest
