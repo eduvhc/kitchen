@@ -29,4 +29,8 @@ public class OutboxMessage
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
+
+    // The one rule for whether a failed attempt dead-letters the row; the store applies it and the
+    // metrics report it, so they cannot disagree.
+    internal bool IsExhaustedAfterFailure(bool permanent) => permanent || AttemptCount >= MaxAttempts;
 }

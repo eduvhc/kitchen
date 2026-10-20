@@ -1,10 +1,12 @@
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 
 namespace MessagingKit;
 
 /// <summary>
 /// Carries W3C trace context across the outbox → transport → inbox hop, so a send and the handling
-/// that follows it land in one trace instead of two unrelated ones.
+/// that follows it land in one trace instead of two unrelated ones, and owns the <see cref="Meter"/>
+/// the outbox dispatcher and inbox processor report their metrics on.
 /// </summary>
 public static class MessagingDiagnostics
 {
@@ -14,6 +16,18 @@ public static class MessagingDiagnostics
     public const string TraceStateHeader = "tracestate";
 
     public static readonly ActivitySource ActivitySource = new(ActivitySourceName);
+
+    /// <summary>
+    /// The name of <see cref="Meter"/>, the same as <see cref="ActivitySourceName"/>. Pass it to
+    /// OpenTelemetry's <c>AddMeter</c> to collect the outbox and inbox metrics.
+    /// </summary>
+    public const string MeterName = ActivitySourceName;
+
+    /// <summary>
+    /// The meter every MessagingKit instrument is created on. Process-wide, like
+    /// <see cref="ActivitySource"/>, so listeners subscribe by <see cref="MeterName"/>.
+    /// </summary>
+    public static readonly Meter Meter = new(MeterName);
 
     /// <summary>
     /// Writes the ambient trace context into the message headers. Called when the message is staged,

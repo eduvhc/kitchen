@@ -208,6 +208,42 @@ builder.Services.AddOpenTelemetry().WithTracing(t => t
 
 You get a `send {type}` producer span at dispatch and a `handle {type}` consumer span at processing, both parented to whatever was active when the caller wrote the row — with the message id, type, and attempt number as tags, and failures marked as errors. Without this, an async boundary makes debugging strictly worse than a method call.
 
+## Metrics
+
+The dispatcher and processor report on a `System.Diagnostics.Metrics` meter named `MessagingKit` — the same name as the activity source, exposed as `MessagingDiagnostics.MeterName`. Subscribe to it alongside the traces:
+
+```csharp
+builder.Services.AddOpenTelemetry()
+    .WithTracing(t => t.AddSource(MessagingDiagnostics.ActivitySourceName))
+    .WithMetrics(m => m.AddMeter(MessagingDiagnostics.MeterName));
+```
+
+| Instrument | Type | Unit | Counts / measures |
+| --- | --- | --- | --- |
+| `messaging.client.sent.messages` | Counter | `{message}` | One per outbox delivery attempt, after its row is marked |
+| `messaging.client.operation.duration` | Histogram | `s` | Wall time of that attempt: resolving the transport, sending, marking the row |
+| `messaging.client.consumed.messages` | Counter | `{message}` | One per inbox handling attempt, after its row is marked |
+| `messaging.process.duration` | Histogram | `s` | Wall time of that attempt: resolving the handler, running it, marking the row |
+| `messagingkit.inbox.received.messages` | Counter | `{message}` | One per `IInbox.TryStoreAsync` call that reached a verdict |
+
+Every instrument carries `messaging.system` = `messagingkit`, `messaging.message.type` (the wire name, as on the spans), and `messagingkit.outcome`:
+
+| Instrument | `messagingkit.outcome` |
+| --- | --- |
+| outbox (`sent.messages`, `operation.duration`) | `sent`, `retried` (back to `Pending` with backoff), `dead` (permanent error or last attempt) |
+| inbox (`consumed.messages`, `process.duration`) | `processed`, `retried`, `dead` |
+| `messagingkit.inbox.received.messages` | `stored`, `duplicate` (the id was already in the inbox) |
+
+The four semantic-convention instruments also carry `messaging.operation.name` and `messaging.operation.type` (`send` for the outbox, `process` for the inbox), and failed attempts carry `error.type`:
+
+- a transport's `Error.Code` when it returns a failed `Result` — keep codes stable and low-cardinality, as ResultingKit asks;
+- the exception's full type name when one is thrown (the handler's own exception, not the reflection wrapper);
+- `unknown_message_type` or `no_handler` when the inbox cannot dispatch a row at all.
+
+Message ids and destinations are never tags — ids are unbounded, and a destination is whatever a caller passed. Durations are measured with `Stopwatch`, not the injected `TimeProvider`, so they stay real when tests fake the clock. Histograms advise the OpenTelemetry messaging buckets (5 ms to 10 s).
+
+There is no gauge for pending or dead rows. Nothing in the process knows the backlog without counting the table, and a `COUNT(*)` per scrape or poll on tables that grow until a retention job trims them is load the kit should not add silently. Query `status` on `messaging.outbox` / `messaging.inbox` from your database monitoring instead; a rising `dead` outcome rate is the in-process signal.
+
 ## Compile-time checks
 
 `MessagingKit.Abstractions` ships an analyzer, so referencing it is all it takes:

@@ -18,6 +18,7 @@ public class Inbox<TContext>(TContext context, TimeProvider clock, IOptions<Inbo
 
         if (await context.Set<InboxMessage>().AnyAsync(m => m.Id == envelope.Id, ct))
         {
+            InboxMetrics.RecordReceived(envelope.Type, InboxMetrics.Duplicate);
             return false;
         }
 
@@ -37,6 +38,7 @@ public class Inbox<TContext>(TContext context, TimeProvider clock, IOptions<Inbo
         try
         {
             await context.SaveChangesAsync(ct);
+            InboxMetrics.RecordReceived(envelope.Type, InboxMetrics.Stored);
             return true;
         }
         catch (DbUpdateException)
@@ -46,6 +48,7 @@ public class Inbox<TContext>(TContext context, TimeProvider clock, IOptions<Inbo
                 entry.State = EntityState.Detached;
             }
 
+            InboxMetrics.RecordReceived(envelope.Type, InboxMetrics.Duplicate);
             return false;
         }
     }

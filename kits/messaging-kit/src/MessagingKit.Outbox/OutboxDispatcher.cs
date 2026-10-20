@@ -122,6 +122,12 @@ public class OutboxDispatcher(
         activity?.SetTag("messaging.message.type", message.Type);
         activity?.SetTag("messaging.attempt", message.AttemptCount);
 
+        var started = Stopwatch.GetTimestamp();
+        string outcome;
+        string? errorType = null;
+
+        // Recorded only after the try, so a misbehaving metrics listener can never send a delivered
+        // message down the failure path.
         try
         {
             var transport = resolver.Resolve(envelope);
@@ -130,17 +136,24 @@ public class OutboxDispatcher(
             if (result.IsSuccess)
             {
                 await store.MarkSentAsync(message, ct);
-                return;
+                outcome = OutboxMetrics.Sent;
             }
+            else
+            {
+                activity?.SetStatus(ActivityStatusCode.Error, result.Error.Message);
 
-            activity?.SetStatus(ActivityStatusCode.Error, result.Error.Message);
+                var permanent = !result.Error.IsTransient;
 
-            await store.MarkFailedAsync(
-                message,
-                result.Error.ToString(),
-                !result.Error.IsTransient,
-                BackoffFor(message.AttemptCount),
-                ct);
+                await store.MarkFailedAsync(
+                    message,
+                    result.Error.ToString(),
+                    permanent,
+                    BackoffFor(message.AttemptCount),
+                    ct);
+
+                outcome = FailureOutcome(message, permanent);
+                errorType = result.Error.Code;
+            }
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -152,6 +165,8 @@ public class OutboxDispatcher(
             logger.LogError(ex, "No transport for {MessageId} of type {MessageType}", message.Id, message.Type);
 
             await store.MarkFailedAsync(message, ex.Message, true, TimeSpan.Zero, CancellationToken.None);
+            outcome = FailureOutcome(message, true);
+            errorType = ex.GetType().FullName ?? "_OTHER";
         }
         catch (Exception ex)
         {
@@ -163,6 +178,14 @@ public class OutboxDispatcher(
                 false,
                 BackoffFor(message.AttemptCount),
                 CancellationToken.None);
+
+            outcome = FailureOutcome(message, false);
+            errorType = ex.GetType().FullName ?? "_OTHER";
         }
+
+        OutboxMetrics.RecordDelivery(message.Type, outcome, errorType, started);
     }
+
+    private static string FailureOutcome(OutboxMessage message, bool permanent) =>
+        message.IsExhaustedAfterFailure(permanent) ? OutboxMetrics.Dead : OutboxMetrics.Retried;
 }

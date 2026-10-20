@@ -101,11 +101,13 @@ public class InboxProcessor(
         var registry = scope.ServiceProvider.GetRequiredService<MessageTypeRegistry>();
         var serializer = scope.ServiceProvider.GetRequiredService<IMessageSerializer>();
 
+        var started = Stopwatch.GetTimestamp();
         var messageType = registry.Resolve(message.Type);
 
         if (messageType is null)
         {
             await store.MarkFailedAsync(message, $"No message type registered for '{message.Type}'.", true, TimeSpan.Zero, ct);
+            InboxMetrics.RecordHandling(message.Type, FailureOutcome(message, true), "unknown_message_type", started);
             return;
         }
 
@@ -115,6 +117,7 @@ public class InboxProcessor(
         if (handler is null)
         {
             await store.MarkFailedAsync(message, $"No handler registered for '{message.Type}'.", true, TimeSpan.Zero, ct);
+            InboxMetrics.RecordHandling(message.Type, FailureOutcome(message, true), "no_handler", started);
             return;
         }
 
@@ -139,6 +142,11 @@ public class InboxProcessor(
         activity?.SetTag("messaging.message.type", message.Type);
         activity?.SetTag("messaging.attempt", message.AttemptCount);
 
+        string outcome;
+        string? errorType = null;
+
+        // Recorded only after the try, so a misbehaving metrics listener can never send a handled
+        // message down the failure path.
         try
         {
             var payload = serializer.Deserialize(message.Payload, messageType);
@@ -146,6 +154,7 @@ public class InboxProcessor(
             await (Task)method.Invoke(handler, [payload, context, ct])!;
 
             await store.MarkProcessedAsync(message, ct);
+            outcome = InboxMetrics.Processed;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -158,12 +167,22 @@ public class InboxProcessor(
 
             activity?.SetStatus(ActivityStatusCode.Error, inner.Message);
 
+            var permanent = inner is MessageSerializationException;
+
             await store.MarkFailedAsync(
                 message,
                 $"{inner.GetType().Name}: {inner.Message}",
-                inner is MessageSerializationException,
+                permanent,
                 BackoffFor(message.AttemptCount),
                 CancellationToken.None);
+
+            outcome = FailureOutcome(message, permanent);
+            errorType = inner.GetType().FullName ?? "_OTHER";
         }
+
+        InboxMetrics.RecordHandling(message.Type, outcome, errorType, started);
     }
+
+    private static string FailureOutcome(InboxMessage message, bool permanent) =>
+        message.IsExhaustedAfterFailure(permanent) ? InboxMetrics.Dead : InboxMetrics.Retried;
 }
