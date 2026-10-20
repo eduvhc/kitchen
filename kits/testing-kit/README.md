@@ -28,12 +28,15 @@ dotnet nuget add source https://nuget.pkg.github.com/eduvhc/index.json \
 | `TestingKit.SqlServer` | `SqlServerFixture` — SQL Server container, SQL helpers, Respawn reset |
 | `TestingKit.Smtp` | `SmtpFixture` — Mailpit container, inbox polling and assertions |
 | `TestingKit.Azurite` | `AzuriteFixture` — blob storage emulator |
+| `TestingKit.Minio` | `MinioFixture` — S3-compatible object storage, buckets, public-read policy, reset |
 | `TestingKit.RabbitMq` | `RabbitMqFixture` — publish, consume with headers, purge |
 | `TestingKit.EntityFramework` | EF Core migration helpers for any fixture |
 | `TestingKit.AspNetCore` | `TestingKitWebApplicationFactory<TEntryPoint>` |
 | `TestingKit.MSTest` | `IntegrationTest` base class with per-test reset |
 
 Each infrastructure package pulls only its own client library, so referencing `TestingKit.Postgres` does not drag in Azure Storage or RabbitMQ.
+
+`MinioFixture` defaults to `cgr.dev/chainguard/minio:latest`: MinIO no longer publishes images to Docker Hub or Quay, and Chainguard's free tier serves only `latest`. Set `MinioContainerOptions.Image` to a digest to freeze it.
 
 ## Quick start (MSTest)
 
@@ -83,7 +86,7 @@ Containers start once per assembly. `IntegrationTest` resets every resettable fi
 
 ## Reset model
 
-`SnapshotAsync()` records the schema as it stands — call it after migrations and seed data. `ResetAsync()` then deletes everything written since, keeping tables, indexes, and migration history. `TestEnvironment.ResetAsync()` fans out to every fixture implementing `IResettableFixture`: Postgres and SQL Server truncate via Respawn, `SmtpFixture` empties the inbox, `AzuriteFixture` clears the containers you list, `RabbitMqFixture` purges the queues you list.
+`SnapshotAsync()` records the schema as it stands — call it after migrations and seed data. `ResetAsync()` then deletes everything written since, keeping tables, indexes, and migration history. `TestEnvironment.ResetAsync()` fans out to every fixture implementing `IResettableFixture`: Postgres and SQL Server truncate via Respawn, `SmtpFixture` empties the inbox, `AzuriteFixture` clears the containers you list, `MinioFixture` empties the buckets you list, `RabbitMqFixture` purges the queues you list.
 
 ## Message headers
 

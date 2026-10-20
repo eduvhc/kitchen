@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/TestingKit/TestingKit.csproj" />
+    <ProjectReference Include="../../src/TestingKit.Minio/TestingKit.Minio.csproj" />
     <ProjectReference Include="../../src/TestingKit.MSTest/TestingKit.MSTest.csproj" />
     <ProjectReference Include="../../src/TestingKit.Postgres/TestingKit.Postgres.csproj" />
     <ProjectReference Include="../../src/TestingKit.RabbitMq/TestingKit.RabbitMq.csproj" />
