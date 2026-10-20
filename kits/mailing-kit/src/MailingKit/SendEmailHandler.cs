@@ -6,6 +6,7 @@ using MailingKit.Transport;
 using MessagingKit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using ResultingKit;
 
 namespace MailingKit;
 
@@ -61,20 +62,20 @@ internal sealed class SendEmailHandler<TContext>(
 
         await RecordAsync(message, context, outgoing, result, ct);
 
-        if (result.Success)
+        if (result.IsSuccess)
         {
             return;
         }
 
         // Throwing hands the outcome back to the inbox, which owns retry and dead-lettering.
-        throw new EmailSendException(result.Error ?? "Unknown send failure", result.IsPermanent);
+        throw new EmailSendException(result.Error.ToString(), !result.Error.IsTransient);
     }
 
     private async Task RecordAsync(
         SendEmail message,
         MessageContext context,
         OutgoingEmail outgoing,
-        SendResult result,
+        Result<SendReceipt> result,
         CancellationToken ct)
     {
         var now = clock.GetUtcNow();
@@ -104,10 +105,10 @@ internal sealed class SendEmailHandler<TContext>(
         }
 
         existing.AttemptCount = context.AttemptCount;
-        existing.Status = result.Success ? EmailStatus.Sent : EmailStatus.Failed;
-        existing.SentAt = result.Success ? now : null;
-        existing.ProviderMessageId = result.ProviderMessageId;
-        existing.LastError = Truncate(result.Error);
+        existing.Status = result.IsSuccess ? EmailStatus.Sent : EmailStatus.Failed;
+        existing.SentAt = result.IsSuccess ? now : null;
+        existing.ProviderMessageId = result.IsSuccess ? result.Value.ProviderMessageId : null;
+        existing.LastError = Truncate(result.Error?.ToString());
 
         await db.SaveChangesAsync(ct);
     }

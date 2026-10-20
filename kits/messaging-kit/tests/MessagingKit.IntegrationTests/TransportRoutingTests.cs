@@ -6,6 +6,7 @@ using MessagingKit.IntegrationTests.Infrastructure;
 using MessagingKit.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using ResultingKit;
 
 namespace MessagingKit.IntegrationTests;
 
@@ -108,10 +109,10 @@ public class TransportRoutingTests : MessagingTest
     {
         public static List<MessageEnvelope> Sent { get; } = [];
 
-        public Task<TransportResult> SendAsync(MessageEnvelope envelope, CancellationToken ct = default)
+        public Task<Result> SendAsync(MessageEnvelope envelope, CancellationToken ct = default)
         {
             Sent.Add(envelope);
-            return Task.FromResult(TransportResult.Ok());
+            return Task.FromResult(Result.Success());
         }
     }
 

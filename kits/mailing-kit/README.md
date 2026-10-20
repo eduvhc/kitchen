@@ -210,21 +210,22 @@ Implement one method:
 
 ```csharp
 using MailingKit.Transport;
+using ResultingKit;
 
 public sealed class ResendEmailSender(HttpClient http) : IEmailSender
 {
-    public async Task<SendResult> SendAsync(OutgoingEmail email, CancellationToken ct = default)
+    public async Task<Result<SendReceipt>> SendAsync(OutgoingEmail email, CancellationToken ct = default)
     {
         var response = await http.PostAsJsonAsync("/emails", Map(email), ct);
 
         if (response.IsSuccessStatusCode)
         {
-            return SendResult.Ok(await ReadProviderIdAsync(response, ct));
+            return new SendReceipt(await ReadProviderIdAsync(response, ct));
         }
 
         return (int)response.StatusCode >= 500
-            ? SendResult.Transient($"{(int)response.StatusCode} from provider")
-            : SendResult.Permanent(await response.Content.ReadAsStringAsync(ct));
+            ? Error.Transient("resend.unavailable", $"{(int)response.StatusCode} from provider")
+            : Error.Failure("resend.rejected", await response.Content.ReadAsStringAsync(ct));
     }
 }
 ```
@@ -233,7 +234,7 @@ public sealed class ResendEmailSender(HttpClient http) : IEmailSender
 builder.Services.AddScoped<IEmailSender, ResendEmailSender>();   // instead of AddSmtpTransport()
 ```
 
-`OutgoingEmail` arrives fully resolved — templates rendered, recipients validated — so a transport only has to move bytes. Return `Permanent` for what retrying cannot fix; the inbox dead-letters those instead of burning ten attempts on a malformed address.
+`OutgoingEmail` arrives fully resolved — templates rendered, recipients validated — so a transport only has to move bytes. Return an `Error.Transient` only for what retrying can fix; any other [ResultingKit](../resulting-kit) error kind is permanent, and the inbox dead-letters those instead of burning ten attempts on a malformed address.
 
 ## The send log
 

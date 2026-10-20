@@ -137,22 +137,22 @@ Implementing a transport is one method:
 ```csharp
 public sealed class BrokerTransport(IBrokerClient broker) : IMessageTransport
 {
-    public async Task<TransportResult> SendAsync(MessageEnvelope envelope, CancellationToken ct = default)
+    public async Task<Result> SendAsync(MessageEnvelope envelope, CancellationToken ct = default)
     {
         try
         {
             await broker.PublishAsync(envelope.Destination ?? envelope.Type, envelope.Payload, ct);
-            return TransportResult.Ok();
+            return Result.Success();
         }
         catch (BrokerException ex)
         {
-            return TransportResult.Transient(ex.Message);
+            return Error.Transient("broker.unreachable", ex.Message);
         }
     }
 }
 ```
 
-Return `Permanent` for failures retrying cannot fix — a malformed destination, a rejected payload. Those skip the retry ladder and go straight to `Dead`.
+Transports return a [ResultingKit](../resulting-kit) `Result`. Only an `ErrorKind.Transient` error is retried; return any other kind (`Error.Validation`, `Error.Failure`, …) for failures retrying cannot fix — a malformed destination, a rejected payload. Those skip the retry ladder and go straight to `Dead`.
 
 ## Receiving
 

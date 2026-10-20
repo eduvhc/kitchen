@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using ResultingKit;
 
 namespace MessagingKit.TestSupport;
 
@@ -6,13 +7,13 @@ public sealed class RecordingTransport : IMessageTransport
 {
     public ConcurrentBag<MessageEnvelope> Sent { get; } = [];
 
-    public Func<MessageEnvelope, TransportResult> Behaviour { get; set; } = _ => TransportResult.Ok();
+    public Func<MessageEnvelope, Result> Behaviour { get; set; } = _ => Result.Success();
 
-    public Task<TransportResult> SendAsync(MessageEnvelope envelope, CancellationToken ct = default)
+    public Task<Result> SendAsync(MessageEnvelope envelope, CancellationToken ct = default)
     {
         var result = Behaviour(envelope);
 
-        if (result.Success)
+        if (result.IsSuccess)
         {
             Sent.Add(envelope);
         }
@@ -23,6 +24,6 @@ public sealed class RecordingTransport : IMessageTransport
     public void Reset()
     {
         Sent.Clear();
-        Behaviour = _ => TransportResult.Ok();
+        Behaviour = _ => Result.Success();
     }
 }

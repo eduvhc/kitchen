@@ -4,6 +4,7 @@ using MailingKit.Transport;
 using MailKit.Net.Smtp;
 using Microsoft.Extensions.Options;
 using MimeKit;
+using ResultingKit;
 
 namespace MailingKit.Smtp;
 
@@ -11,7 +12,7 @@ public class SmtpEmailSender(IOptions<SmtpOptions> options, ILogger<SmtpEmailSen
 {
     private readonly SmtpOptions _options = options.Value;
 
-    public async Task<SendResult> SendAsync(OutgoingEmail email, CancellationToken ct = default)
+    public async Task<Result<SendReceipt>> SendAsync(OutgoingEmail email, CancellationToken ct = default)
     {
         MimeMessage mime;
         try
@@ -20,7 +21,7 @@ public class SmtpEmailSender(IOptions<SmtpOptions> options, ILogger<SmtpEmailSen
         }
         catch (ParseException ex)
         {
-            return SendResult.Permanent($"Malformed address: {ex.Message}");
+            return Error.Validation("smtp.malformed_address", $"Malformed address: {ex.Message}");
         }
 
         using var client = new SmtpClient
@@ -53,7 +54,7 @@ public class SmtpEmailSender(IOptions<SmtpOptions> options, ILogger<SmtpEmailSen
             {
                 logger.LogInformation("Sent email to {RecipientCount} recipients", email.To.Count);
             }
-            return SendResult.Ok(mime.MessageId ?? response);
+            return new SendReceipt(mime.MessageId ?? response);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -62,12 +63,12 @@ public class SmtpEmailSender(IOptions<SmtpOptions> options, ILogger<SmtpEmailSen
         catch (SmtpCommandException ex) when (IsPermanent(ex))
         {
             logger.LogWarning(ex, "Permanent SMTP failure for {Subject}", email.Subject);
-            return SendResult.Permanent($"{ex.ErrorCode}/{ex.StatusCode}: {ex.Message}");
+            return Error.Failure("smtp.rejected", $"{ex.ErrorCode}/{ex.StatusCode}: {ex.Message}");
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Transient SMTP failure for {Subject}", email.Subject);
-            return SendResult.Transient($"{ex.GetType().Name}: {ex.Message}");
+            return Error.Transient("smtp.unavailable", $"{ex.GetType().Name}: {ex.Message}");
         }
     }
 

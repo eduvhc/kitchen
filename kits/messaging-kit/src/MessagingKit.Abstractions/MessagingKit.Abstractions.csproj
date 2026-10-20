@@ -12,6 +12,10 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../../resulting-kit/src/ResultingKit/ResultingKit.csproj" />
+  </ItemGroup>
+
   <!--
     The analyzer ships inside this package so anything referencing MessagingKit gets the wiring
     checks. ReferenceOutputAssembly is false because the analyzer is tooling, not a runtime
