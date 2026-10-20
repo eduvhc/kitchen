@@ -4,8 +4,12 @@ using Microsoft.AspNetCore.Http.HttpResults;
 namespace ResultingKit.AspNetCore;
 
 /// <summary>
-/// Turns a <see cref="Result"/> into an <see cref="IResult"/> for minimal APIs. A failure becomes an
-/// RFC 9457 problem built by <see cref="ErrorHttpExtensions.ToProblemDetails"/>.
+/// Turns a <see cref="Result"/> into an <see cref="IResult"/> for minimal APIs. A failure becomes the
+/// <see cref="ProblemHttpResult"/> that <see cref="TypedResults.Problem(string, string, int?, string, string, IDictionary{string, object})"/>
+/// builds: <c>detail</c> is <see cref="Error.Message"/>, a <c>code</c> extension carries <see cref="Error.Code"/>,
+/// and ASP.NET Core fills <c>title</c> and <c>type</c> from the status. When the host registers
+/// <c>AddProblemDetails()</c>, it is written through <c>IProblemDetailsService</c>, which adds a <c>traceId</c>
+/// and runs <c>ProblemDetailsOptions.CustomizeProblemDetails</c>.
 /// </summary>
 public static class ResultHttpResultExtensions
 {
@@ -148,5 +152,8 @@ public static class ResultHttpResultExtensions
     }
 
     private static ProblemHttpResult Problem(Error error, Func<Error, int>? statusCode) =>
-        TypedResults.Problem(error.ToProblemDetails(statusCode));
+        TypedResults.Problem(
+            detail: error.Message,
+            statusCode: error.ToStatusCode(statusCode),
+            extensions: [new(ErrorHttpExtensions.CodeExtension, error.Code)]);
 }

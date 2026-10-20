@@ -83,7 +83,7 @@ var label = await orders.GetAsync(id, ct)
 dotnet add package ResultingKit.AspNetCore
 ```
 
-A success becomes `204 No Content` for a `Result` and `200 OK` with the value for a `Result<T>`. A failure becomes an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem, written as `application/problem+json`:
+A success becomes `204 No Content` for a `Result` and `200 OK` with the value for a `Result<T>`. A failure becomes an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem, built by ASP.NET Core's own problem details services rather than by hand, so it looks like every other problem your app returns:
 
 ```json
 {
@@ -91,11 +91,12 @@ A success becomes `204 No Content` for a `Result` and `200 OK` with the value fo
   "title": "Not Found",
   "status": 404,
   "detail": "Order 42 does not exist.",
-  "code": "order.not_found"
+  "code": "order.not_found",
+  "traceId": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
 }
 ```
 
-`detail` is `Error.Message` and `code` is `Error.Code`. The status comes from `Error.Kind`:
+`detail` is `Error.Message` and `code` is `Error.Code`. `title` and `type` are ASP.NET Core's defaults for the status (`ProblemDetailsDefaults` for minimal APIs, `ApiBehaviorOptions.ClientErrorMapping` for controllers, which starts from the same table). The status comes from `Error.Kind`:
 
 | Kind | Status |
 | --- | --- |
@@ -121,11 +122,11 @@ app.MapDelete("/orders/{id:guid}", (Guid id, OrderService orders, CancellationTo
     orders.CancelAsync(id, ct).ToHttpResultAsync());
 ```
 
-Register `builder.Services.AddProblemDetails()` and failures go through ASP.NET Core's `IProblemDetailsService`, which adds a `traceId` and runs any `CustomizeProblemDetails` you configured.
+A failure is what `TypedResults.Problem` returns. Register `builder.Services.AddProblemDetails()` and it is written through `IProblemDetailsService`, which adds the `traceId` and runs any `CustomizeProblemDetails` you configured. Without it, ASP.NET Core writes the problem as plain JSON: same fields, no `traceId`, no customisation.
 
 ### Controllers
 
-`ToActionResult` returns an `IActionResult`; `ToActionResultAsync` awaits first. A failure is an `ObjectResult` carrying the `ProblemDetails`:
+`ToActionResult` returns an `IActionResult`; `ToActionResultAsync` awaits first. A failure is an `ErrorActionResult`, which does what `ControllerBase.Problem()` does: when it executes it asks MVC's `ProblemDetailsFactory` for the problem, adds `code`, and writes it through an `ObjectResult`, so content negotiation and your formatters apply. The default factory always adds the `traceId`, takes `title` and `type` from `ClientErrorMapping`, and runs `AddProblemDetails(o => o.CustomizeProblemDetails = ...)`. As with `Problem()`, that callback runs before `code` is added.
 
 ```csharp
 using ResultingKit.AspNetCore;
@@ -133,6 +134,14 @@ using ResultingKit.AspNetCore;
 [HttpGet("{id:guid}")]
 public Task<IActionResult> Get(Guid id, CancellationToken ct) =>
     orders.GetAsync(id, ct).ToActionResultAsync();
+```
+
+In a controller unit test, `ErrorActionResult` exposes `Error` and `StatusCode`, so there is nothing to execute:
+
+```csharp
+var problem = (ErrorActionResult)controller.Get(id);
+Assert.AreEqual(404, problem.StatusCode);
+Assert.AreEqual("order.not_found", problem.Error.Code);
 ```
 
 ### Choosing the success response
@@ -168,6 +177,4 @@ app.MapGet("/orders/{id:guid}", (Guid id, OrderService orders, CancellationToken
     orders.GetAsync(id, ct).ToHttpResultAsync(statusCode: Status));
 ```
 
-The override is a plain argument rather than a global setting, so each endpoint says what it does and a test can call it directly. `title` and `type` follow whatever status it picks.
-
-`error.ToProblemDetails(statusCode)` builds the same `ProblemDetails` on its own, for an exception handler or a custom response.
+The override is a plain argument rather than a global setting, so each endpoint says what it does and a test can call it directly. `title` and `type` follow whatever status it picks; a status ASP.NET Core has no default for gets the reason phrase as `title` on minimal APIs and no `title` on controllers, exactly as `TypedResults.Problem` and `ControllerBase.Problem` behave.

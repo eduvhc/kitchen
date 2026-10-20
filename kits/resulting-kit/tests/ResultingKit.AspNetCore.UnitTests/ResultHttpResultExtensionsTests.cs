@@ -16,9 +16,11 @@ public sealed class ResultHttpResultExtensionsTests
         public JsonElement Json => JsonDocument.Parse(Body).RootElement;
     }
 
-    private static async Task<Response> ExecuteAsync(IResult result)
+    private static async Task<Response> ExecuteAsync(IResult result, Action<IServiceCollection>? configure = null)
     {
-        var services = new ServiceCollection().AddLogging().BuildServiceProvider();
+        var collection = new ServiceCollection().AddLogging();
+        configure?.Invoke(collection);
+        await using var services = collection.BuildServiceProvider();
         await using var body = new MemoryStream();
         var context = new DefaultHttpContext { RequestServices = services };
         context.Response.Body = body;
@@ -59,7 +61,7 @@ public sealed class ResultHttpResultExtensionsTests
     [DataRow(ErrorKind.NotFound, 404, "Not Found")]
     [DataRow(ErrorKind.Conflict, 409, "Conflict")]
     [DataRow(ErrorKind.Transient, 503, "Service Unavailable")]
-    [DataRow(ErrorKind.Failure, 500, "Internal Server Error")]
+    [DataRow(ErrorKind.Failure, 500, "An error occurred while processing your request.")]
     public async Task Failure_is_a_problem(ErrorKind kind, int status, string title)
     {
         var error = new Error("order.locked", "Order 42 is locked.", kind);
@@ -76,6 +78,37 @@ public sealed class ResultHttpResultExtensionsTests
             Assert.AreEqual("order.locked", response.Json.GetProperty("code").GetString());
             StringAssert.StartsWith(response.Json.GetProperty("type").GetString(), "https://tools.ietf.org/html/rfc9110#");
         }
+    }
+
+    [TestMethod]
+    public async Task Failure_without_problem_details_services_has_no_trace_id()
+    {
+        var response = await ExecuteAsync(Result.Failure(s_missing).ToHttpResult());
+
+        Assert.AreEqual("application/problem+json", response.ContentType);
+        Assert.IsFalse(response.Json.TryGetProperty("traceId", out _));
+    }
+
+    [TestMethod]
+    public async Task Failure_goes_through_the_problem_details_service()
+    {
+        var response = await ExecuteAsync(
+            Result.Failure(s_missing).ToHttpResult(),
+            services => services.AddProblemDetails(o => o.CustomizeProblemDetails = c => c.ProblemDetails.Extensions["node"] = "a"));
+
+        Assert.AreEqual("application/problem+json", response.ContentType);
+        Assert.IsFalse(string.IsNullOrEmpty(response.Json.GetProperty("traceId").GetString()));
+        Assert.AreEqual("a", response.Json.GetProperty("node").GetString());
+        Assert.AreEqual("order.not_found", response.Json.GetProperty("code").GetString());
+    }
+
+    [TestMethod]
+    public async Task Failure_for_a_status_without_a_default_takes_the_reason_phrase()
+    {
+        var response = await ExecuteAsync(Result.Failure(s_missing).ToHttpResult(_ => 429));
+
+        Assert.AreEqual(429, response.Status);
+        Assert.AreEqual("Too Many Requests", response.Json.GetProperty("title").GetString());
     }
 
     [TestMethod]

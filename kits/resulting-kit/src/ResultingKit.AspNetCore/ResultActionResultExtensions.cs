@@ -4,13 +4,10 @@ namespace ResultingKit.AspNetCore;
 
 /// <summary>
 /// Turns a <see cref="Result"/> into an <see cref="IActionResult"/> for controllers. A failure becomes an
-/// <see cref="ObjectResult"/> carrying an RFC 9457 problem built by
-/// <see cref="ErrorHttpExtensions.ToProblemDetails"/>, written as <c>application/problem+json</c>.
+/// <see cref="ErrorActionResult"/>, an RFC 9457 problem built by MVC's <c>ProblemDetailsFactory</c>.
 /// </summary>
 public static class ResultActionResultExtensions
 {
-    private const string ProblemJson = "application/problem+json";
-
     /// <summary>Returns 204 No Content on success, or a problem response on failure.</summary>
     /// <param name="result">The result to convert.</param>
     /// <param name="statusCode">
@@ -152,14 +149,6 @@ public static class ResultActionResultExtensions
         return (await result.ConfigureAwait(false)).ToActionResult(onSuccess, statusCode);
     }
 
-    private static ObjectResult Problem(Error error, Func<Error, int>? statusCode)
-    {
-        var problem = error.ToProblemDetails(statusCode);
-
-        return new ObjectResult(problem)
-        {
-            StatusCode = problem.Status,
-            ContentTypes = { ProblemJson },
-        };
-    }
+    private static ErrorActionResult Problem(Error error, Func<Error, int>? statusCode) =>
+        new(error, error.ToStatusCode(statusCode));
 }

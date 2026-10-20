@@ -1,4 +1,9 @@
+using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ResultingKit.AspNetCore.UnitTests;
 
@@ -7,15 +12,30 @@ public sealed class ResultActionResultExtensionsTests
 {
     private static readonly Error s_missing = Error.NotFound("order.not_found", "Order 42 does not exist.");
 
-    private static ProblemDetails AssertProblem(IActionResult actual, int status)
+    private sealed record Response(int Status, string? ContentType, JsonElement Json);
+
+    private static ErrorActionResult AssertProblem(IActionResult actual, int status)
     {
-        var result = Assert.IsInstanceOfType<ObjectResult>(actual);
-        var problem = Assert.IsInstanceOfType<ProblemDetails>(result.Value);
+        var result = Assert.IsInstanceOfType<ErrorActionResult>(actual);
 
         Assert.AreEqual(status, result.StatusCode);
-        Assert.AreEqual(status, problem.Status);
-        CollectionAssert.AreEqual(new[] { "application/problem+json" }, result.ContentTypes.ToArray());
-        return problem;
+        return result;
+    }
+
+    private static async Task<Response> ExecuteAsync(IActionResult result, Action<IServiceCollection>? configure = null)
+    {
+        var services = new ServiceCollection().AddLogging();
+        services.AddMvcCore();
+        configure?.Invoke(services);
+        await using var provider = services.BuildServiceProvider();
+        await using var body = new MemoryStream();
+        var context = new DefaultHttpContext { RequestServices = provider };
+        context.Response.Body = body;
+
+        await result.ExecuteResultAsync(new ActionContext(context, new RouteData(), new ActionDescriptor()));
+
+        using var json = JsonDocument.Parse(body.ToArray());
+        return new Response(context.Response.StatusCode, context.Response.ContentType, json.RootElement.Clone());
     }
 
     [TestMethod]
@@ -40,20 +60,50 @@ public sealed class ResultActionResultExtensionsTests
     [DataRow(ErrorKind.NotFound, 404, "Not Found")]
     [DataRow(ErrorKind.Conflict, 409, "Conflict")]
     [DataRow(ErrorKind.Transient, 503, "Service Unavailable")]
-    [DataRow(ErrorKind.Failure, 500, "Internal Server Error")]
-    public void Failure_is_a_problem(ErrorKind kind, int status, string title)
+    [DataRow(ErrorKind.Failure, 500, "An error occurred while processing your request.")]
+    public async Task Failure_is_a_problem(ErrorKind kind, int status, string title)
     {
         var error = new Error("order.locked", "Order 42 is locked.", kind);
 
         foreach (var result in new[] { Result.Failure(error).ToActionResult(), Result.Failure<string>(error).ToActionResult() })
         {
-            var problem = AssertProblem(result, status);
+            Assert.AreSame(error, AssertProblem(result, status).Error);
 
-            Assert.AreEqual(title, problem.Title);
-            Assert.AreEqual("Order 42 is locked.", problem.Detail);
-            Assert.AreEqual("order.locked", problem.Extensions["code"]);
-            StringAssert.StartsWith(problem.Type, "https://tools.ietf.org/html/rfc9110#");
+            var response = await ExecuteAsync(result);
+
+            Assert.AreEqual(status, response.Status);
+            StringAssert.StartsWith(response.ContentType, "application/problem+json;");
+            Assert.AreEqual(status, response.Json.GetProperty("status").GetInt32());
+            Assert.AreEqual(title, response.Json.GetProperty("title").GetString());
+            Assert.AreEqual("Order 42 is locked.", response.Json.GetProperty("detail").GetString());
+            Assert.AreEqual("order.locked", response.Json.GetProperty("code").GetString());
+            Assert.IsFalse(string.IsNullOrEmpty(response.Json.GetProperty("traceId").GetString()));
+            StringAssert.StartsWith(response.Json.GetProperty("type").GetString(), "https://tools.ietf.org/html/rfc9110#");
         }
+    }
+
+    [TestMethod]
+    public async Task Failure_honours_the_host_problem_details_options()
+    {
+        var response = await ExecuteAsync(Result.Failure(s_missing).ToActionResult(), services =>
+        {
+            services.Configure<ApiBehaviorOptions>(o => o.ClientErrorMapping[404].Link = "https://example.com/missing");
+            services.AddProblemDetails(o => o.CustomizeProblemDetails = c => c.ProblemDetails.Extensions["node"] = "a");
+        });
+
+        Assert.AreEqual("https://example.com/missing", response.Json.GetProperty("type").GetString());
+        Assert.AreEqual("a", response.Json.GetProperty("node").GetString());
+        Assert.AreEqual("order.not_found", response.Json.GetProperty("code").GetString());
+    }
+
+    [TestMethod]
+    public async Task Failure_for_a_status_without_a_mapping_has_no_title()
+    {
+        var response = await ExecuteAsync(Result.Failure(s_missing).ToActionResult(_ => 418));
+
+        Assert.AreEqual(418, response.Status);
+        Assert.IsFalse(response.Json.TryGetProperty("title", out _));
+        Assert.AreEqual("Order 42 does not exist.", response.Json.GetProperty("detail").GetString());
     }
 
     [TestMethod]
@@ -106,6 +156,7 @@ public sealed class ResultActionResultExtensionsTests
     [TestMethod]
     public async Task Null_arguments_are_rejected()
     {
+        Assert.ThrowsExactly<ArgumentNullException>(() => new ErrorActionResult(null!, 400));
         Assert.ThrowsExactly<ArgumentNullException>(() => ((Result)null!).ToActionResult());
         Assert.ThrowsExactly<ArgumentNullException>(() => ((Result<int>)null!).ToActionResult());
         Assert.ThrowsExactly<ArgumentNullException>(() => Result.Success().ToActionResult((Func<IActionResult>)null!));
