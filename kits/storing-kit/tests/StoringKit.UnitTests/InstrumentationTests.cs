@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.Metrics.Testing;
-using StoringKit.Diagnostics;
 
 namespace StoringKit.UnitTests;
 

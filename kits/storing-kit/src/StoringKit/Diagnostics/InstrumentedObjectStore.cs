@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using ResultingKit;
 
-namespace StoringKit.Diagnostics;
+namespace StoringKit;
 
 /// <summary>
 /// Wraps a registered store so every operation emits a span and metrics, whichever provider it is. Keys, content and

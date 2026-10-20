@@ -1,4 +1,4 @@
-namespace StoringKit.Diagnostics;
+namespace StoringKit;
 
 /// <summary>
 /// Attribute names and values. OpenTelemetry's object-storage conventions are AWS-specific and carry the key, which

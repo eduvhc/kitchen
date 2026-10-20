@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
-namespace StoringKit.Diagnostics;
+namespace StoringKit;
 
 /// <summary>StoringKit's instruments, on a meter owned by the host's <see cref="IMeterFactory"/>.</summary>
 internal sealed class StoringKitMetrics
