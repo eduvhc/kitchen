@@ -9,7 +9,7 @@ A family of small, independent .NET packages. Each kit owns one concern, version
 | [TestingKit](kits/testing-kit) | Real infrastructure in tests, on Testcontainers | `TestingKit`, `.Postgres`, `.SqlServer`, `.Smtp`, `.RabbitMq`, `.Azurite`, `.EntityFramework`, `.AspNetCore`, `.MSTest` |
 | [MessagingKit](kits/messaging-kit) | Transactional outbox and inbox; durable messaging between modules | `MessagingKit`, `.Abstractions`, `.Outbox`, `.Inbox`, `.InProcess`, `.Testing` |
 | [MailingKit](kits/mailing-kit) | Email as a module: templates, SMTP, a record of what was sent | `MailingKit`, `.Smtp` |
-| [ResultingKit](kits/resulting-kit) | Explicit success and failure; typed errors that say whether retrying helps | `ResultingKit` |
+| [ResultingKit](kits/resulting-kit) | Explicit success and failure; typed errors that say whether retrying helps | `ResultingKit`, `.AspNetCore` |
 
 Each kit's own README documents its packages, and is what ships as the NuGet readme.
 

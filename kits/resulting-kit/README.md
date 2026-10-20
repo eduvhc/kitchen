@@ -6,7 +6,7 @@ Explicit success and failure for operations that can fail in an expected way. Ex
 dotnet add package ResultingKit
 ```
 
-No dependencies. MessagingKit and MailingKit use it for their transport contracts, so a transport you write for either returns the same type.
+No dependencies. MessagingKit and MailingKit use it for their transport contracts, so a transport you write for either returns the same type. To turn results into HTTP responses, add `ResultingKit.AspNetCore` — see [Mapping to HTTP](#mapping-to-http).
 
 ## The types
 
@@ -77,7 +77,25 @@ var label = await orders.GetAsync(id, ct)
 
 ## Mapping to HTTP
 
-The kit ships no ASP.NET Core dependency. A host maps kinds itself, typically:
+`ResultingKit` itself has no ASP.NET Core dependency. The HTTP mapping ships separately:
+
+```bash
+dotnet add package ResultingKit.AspNetCore
+```
+
+A success becomes `204 No Content` for a `Result` and `200 OK` with the value for a `Result<T>`. A failure becomes an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem, written as `application/problem+json`:
+
+```json
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "Order 42 does not exist.",
+  "code": "order.not_found"
+}
+```
+
+`detail` is `Error.Message` and `code` is `Error.Code`. The status comes from `Error.Kind`:
 
 | Kind | Status |
 | --- | --- |
@@ -88,3 +106,68 @@ The kit ships no ASP.NET Core dependency. A host maps kinds itself, typically:
 | `Conflict` | 409 |
 | `Transient` | 503 |
 | `Failure` | 500 |
+
+### Minimal APIs
+
+`ToHttpResult` returns an `IResult`; `ToHttpResultAsync` does the same for a `Task<Result>` or `Task<Result<T>>`:
+
+```csharp
+using ResultingKit.AspNetCore;
+
+app.MapGet("/orders/{id:guid}", (Guid id, OrderService orders, CancellationToken ct) =>
+    orders.GetAsync(id, ct).ToHttpResultAsync());
+
+app.MapDelete("/orders/{id:guid}", (Guid id, OrderService orders, CancellationToken ct) =>
+    orders.CancelAsync(id, ct).ToHttpResultAsync());
+```
+
+Register `builder.Services.AddProblemDetails()` and failures go through ASP.NET Core's `IProblemDetailsService`, which adds a `traceId` and runs any `CustomizeProblemDetails` you configured.
+
+### Controllers
+
+`ToActionResult` returns an `IActionResult`; `ToActionResultAsync` awaits first. A failure is an `ObjectResult` carrying the `ProblemDetails`:
+
+```csharp
+using ResultingKit.AspNetCore;
+
+[HttpGet("{id:guid}")]
+public Task<IActionResult> Get(Guid id, CancellationToken ct) =>
+    orders.GetAsync(id, ct).ToActionResultAsync();
+```
+
+### Choosing the success response
+
+Pass a function to build the success response yourself. It is not called on failure:
+
+```csharp
+app.MapPost("/orders", (NewOrder input, OrderService orders) =>
+    orders.Create(input).ToHttpResult(order => TypedResults.Created($"/orders/{order.Id}", order)));
+
+[HttpPost]
+public IActionResult Post(NewOrder input) =>
+    orders.Create(input).ToActionResult(order => CreatedAtAction(nameof(Get), new { id = order.Id }, order));
+```
+
+A plain `Result` takes a parameterless function, such as `() => TypedResults.Accepted(location)`.
+
+### Choosing the status
+
+Every method takes an optional `statusCode` function, `Func<Error, int>`. `ToStatusCode()` is the default mapping, so an override only has to name its exceptions:
+
+```csharp
+static int Status(Error error) => error.Code switch
+{
+    "order.name_required" => StatusCodes.Status422UnprocessableEntity,
+    _ => error.ToStatusCode(),
+};
+
+app.MapPost("/orders", (NewOrder input, OrderService orders) =>
+    orders.Create(input).ToHttpResult(order => TypedResults.Created($"/orders/{order.Id}", order), Status));
+
+app.MapGet("/orders/{id:guid}", (Guid id, OrderService orders, CancellationToken ct) =>
+    orders.GetAsync(id, ct).ToHttpResultAsync(statusCode: Status));
+```
+
+The override is a plain argument rather than a global setting, so each endpoint says what it does and a test can call it directly. `title` and `type` follow whatever status it picks.
+
+`error.ToProblemDetails(statusCode)` builds the same `ProblemDetails` on its own, for an exception handler or a custom response.
