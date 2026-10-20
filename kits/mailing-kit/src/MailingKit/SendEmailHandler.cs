@@ -45,6 +45,7 @@ internal sealed class SendEmailHandler<TContext>(
 
         var outgoing = new OutgoingEmail
         {
+            IdempotencyKey = IdempotencyKeyFor(context.MessageId),
             FromAddress = content.FromAddress,
             FromName = content.FromName,
             ReplyTo = message.ReplyTo ?? _defaults.ReplyTo,
@@ -112,6 +113,11 @@ internal sealed class SendEmailHandler<TContext>(
 
         await db.SaveChangesAsync(ct);
     }
+
+    /// <summary>
+    /// The inbox redelivers a message under the same id, so every retry derives the same key.
+    /// </summary>
+    internal static string IdempotencyKeyFor(Guid messageId) => $"mailingkit-{messageId:N}";
 
     private static string? Truncate(string? error) =>
         error is { Length: > 4000 } ? error[..4000] : error;
