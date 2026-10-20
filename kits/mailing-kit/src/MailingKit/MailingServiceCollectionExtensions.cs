@@ -1,8 +1,5 @@
-using MailingKit.Diagnostics;
-using MailingKit.Options;
+using MailingKit.Sending;
 using MailingKit.Templates;
-using MailingKit.Templating;
-using MailingKit.Transport;
 using MessagingKit.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;

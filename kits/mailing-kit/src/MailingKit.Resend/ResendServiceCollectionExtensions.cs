@@ -1,5 +1,5 @@
 using System.Net.Http.Headers;
-using MailingKit.Transport;
+using MailingKit.Sending;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;

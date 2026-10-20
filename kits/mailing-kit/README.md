@@ -43,6 +43,17 @@ dotnet add package MailingKit.Smtp      # or MailingKit.Resend
 
 Each transport is its own package, so a host on Resend never pulls in MailKit and a host on SMTP never pulls in `Microsoft.Extensions.Http`. Register exactly one.
 
+`MailingKit` is organised by feature, and each feature is one namespace:
+
+| Namespace | Contents |
+| --- | --- |
+| `MailingKit` | `AddMailing`, `MailingOptions`, `MailingKitInstrumentation` |
+| `MailingKit.Sending` | `SendEmail`, `IEmailSender`, `OutgoingEmail`, `SendReceipt`, `Attachment`, `EmailDefaultsOptions`, the exceptions |
+| `MailingKit.Templates` | `ITemplateStore`, `IWritableTemplateStore`, `ITemplateRenderer`, `EmailTemplate`, `TemplateOptions`, `modelBuilder.AddEmailTemplates()` |
+| `MailingKit.SendLog` | `EmailLog`, `EmailStatus`, `modelBuilder.AddMailing()` |
+
+The transports keep their own namespaces, `MailingKit.Smtp` and `MailingKit.Resend`.
+
 ## Quick start
 
 Everything below is complete — copy it, point the connection string at your database, and it runs.
@@ -52,7 +63,8 @@ Everything below is complete — copy it, point the connection string at your da
 Both kits map their tables into the context you already own, so `dotnet ef migrations add` picks them up in your own migration history. Neither package ships migrations.
 
 ```csharp
-using MailingKit.Persistence;
+using MailingKit.SendLog;
+using MailingKit.Templates;
 using MessagingKit;
 using Microsoft.EntityFrameworkCore;
 
@@ -119,8 +131,8 @@ dotnet ef database update
 Inject `IOutbox` wherever the email is a consequence of work you are already doing:
 
 ```csharp
-using MailingKit;
-using MessagingKit.Outbox.Abstractions;
+using MailingKit.Sending;
+using MessagingKit.Outbox;
 
 public sealed class InvoiceService(AppDbContext db, IOutbox outbox)
 {
@@ -279,7 +291,7 @@ Error codes are `resend.` plus Resend's own error name — `resend.validation_er
 Implement one method:
 
 ```csharp
-using MailingKit.Transport;
+using MailingKit.Sending;
 using ResultingKit;
 
 public sealed class AcmeMailSender(HttpClient http) : IEmailSender
@@ -382,6 +394,10 @@ SMTP settings live on `AddSmtpTransport`: `Host`, `Port`, `Security`, `Username`
 `MessagingKit.Testing` drives both halves to completion, so a test asserts on the email rather than sleeping:
 
 ```csharp
+using MailingKit.Sending;
+using MailingKit.SendLog;
+using MessagingKit.Testing;
+
 outbox.Add(new SendEmail { To = ["ada@example.com"], Subject = "Hi", Text = "Hi" });
 await db.SaveChangesAsync();
 

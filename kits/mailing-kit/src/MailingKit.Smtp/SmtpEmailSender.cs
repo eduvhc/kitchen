@@ -1,9 +1,8 @@
 using System.Buffers;
 using System.Security.Cryptography;
 using System.Text;
-using MailingKit.Domain;
+using MailingKit.Sending;
 using Microsoft.Extensions.Logging;
-using MailingKit.Transport;
 using MailKit.Net.Smtp;
 using Microsoft.Extensions.Options;
 using MimeKit;
