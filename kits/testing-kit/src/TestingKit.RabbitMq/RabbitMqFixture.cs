@@ -7,20 +7,6 @@ using Testcontainers.RabbitMq;
 
 namespace TestingKit.RabbitMq;
 
-public sealed class RabbitMqContainerOptions : ContainerOptions
-{
-    public const string DefaultImage = "rabbitmq:4.1-management";
-
-    public RabbitMqContainerOptions() => Image = DefaultImage;
-}
-
-public sealed class RabbitMqClientOptions : ClientOptions
-{
-    public bool ReuseConnection { get; set; }
-
-    public IList<string> QueuesToPurge { get; } = [];
-}
-
 /// <summary>A consumed message with the headers a body-only read throws away.</summary>
 /// <param name="Body">The UTF-8 message body.</param>
 /// <param name="Headers">
