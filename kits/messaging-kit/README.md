@@ -178,6 +178,8 @@ if (await inbox.TryStoreAsync(envelope, ct))
 
 `TryStoreAsync` is the deduplication point: the message id is the primary key, so a redelivery cannot create a second row. Acknowledge the transport immediately; the background `InboxProcessor` resolves `IMessageHandler<T>`, runs it, and marks the row `Processed`. A throwing handler is retried with backoff, then dead-lettered.
 
+The inbox runs a handler once per message, but a retry runs it again after a side effect may already have happened — an HTTP call that succeeded but whose response was lost. When the handler calls something that accepts an idempotency key, derive the key from `context.MessageId`: it is the same on every attempt and unique per message. MailingKit does exactly this for [Resend](../mailing-kit#retries-and-duplicates).
+
 ## À la carte
 
 Outbox and inbox work on their own if you do not want both:

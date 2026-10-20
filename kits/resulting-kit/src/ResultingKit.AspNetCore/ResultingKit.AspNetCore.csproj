@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Turns ResultingKit results into ASP.NET Core responses: IResult for minimal APIs, IActionResult for controllers, RFC 9457 problem details for failures.</Description>
+    <PackageTags>result;error;problem-details;aspnetcore;minimal-api</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ResultingKit/ResultingKit.csproj" />
+  </ItemGroup>
+
+</Project>
