@@ -31,7 +31,7 @@ What is left is the part that is actually about email.
 
 | Package | Contents |
 | --- | --- |
-| `MailingKit` | `SendEmail`, the handler, templates, send log |
+| `MailingKit` | `SendEmail`, the handler, templates, send log, traces and metrics |
 | `MailingKit.Smtp` | `SmtpEmailSender` on MailKit |
 | `MailingKit.Resend` | `ResendEmailSender` on `HttpClient` and the [Resend](https://resend.com) API — no SDK |
 
@@ -299,6 +299,45 @@ order by created_at desc;
 ```
 
 Keyed unique on `message_id`, so a redelivered message updates its row rather than adding a second one.
+
+## Observability
+
+MailingKit traces and measures every send on its own, the way `HttpClient` and EF Core do: it uses only `ActivitySource` and `Meter` from the runtime, with no OpenTelemetry package. Nothing is recorded until the host listens:
+
+```csharp
+builder.Services.AddOpenTelemetry()
+    .WithTracing(t => t.AddSource(MailingKitInstrumentation.ActivitySourceName))
+    .WithMetrics(m => m.AddMeter(MailingKitInstrumentation.MeterName));
+```
+
+`AddMailing` wraps whichever `IEmailSender` is registered (SMTP, Resend, or your own), whether the transport is added before or after it, so a custom transport is instrumented without doing anything.
+
+An email is a message, so each send also appears inside MessagingKit's `handle send-email` consumer span when MessagingKit's tracing is on. That span covers the whole handler — templates, the send log, the send; MailingKit's span covers only the call to the provider.
+
+OpenTelemetry has no semantic conventions for email, so the attributes use the `mailingkit.` prefix, apart from the general `error.type`.
+
+**Span** — `send email`, kind `Client`, one per call to the transport:
+
+| Attribute | Value |
+| --- | --- |
+| `mailingkit.provider` | `smtp`, `resend`, or the lowercased sender type name without its `EmailSender` / `MailSender` / `Sender` suffix |
+| `mailingkit.email.recipient_count` | To + Cc + Bcc |
+| `mailingkit.email.attachment_count` | Number of attachments |
+| `mailingkit.outcome` | `sent` or `failed` |
+| `mailingkit.email.provider_message_id` | The provider's id, on success |
+| `error.type` | The `Error.Code` (`resend.rate_limit_exceeded`), or the exception's full type name |
+| `mailingkit.error.kind` | The `ErrorKind`, in snake case: `transient`, `validation`, `not_found`, … — `transient` is the only one the inbox retries |
+
+A failure sets the span status to `Error` with the error code as its description; the provider's message is left out because it can echo recipient addresses. An exception is recorded as an `exception` event and rethrown unchanged, cancellation included. No addresses, subjects, or bodies are recorded anywhere.
+
+**Metrics** — on the `MailingKit` meter, created through the host's `IMeterFactory`:
+
+| Instrument | Type | Unit | Attributes |
+| --- | --- | --- | --- |
+| `mailingkit.client.sent.emails` | Counter | `{email}` | `mailingkit.provider`, `mailingkit.outcome`, plus `error.type` and `mailingkit.error.kind` on failure |
+| `mailingkit.client.send.duration` | Histogram | `s` | Same as above |
+
+Both count attempts, so a send the inbox retries three times counts three. The histogram advises OpenTelemetry's bucket boundaries for seconds (5 ms to 10 s). Provider message ids are on the span only, never on metrics.
 
 ## Configuration
 

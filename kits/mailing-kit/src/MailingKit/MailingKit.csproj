@@ -8,6 +8,7 @@
     <!-- PrivateAssets="none" so MessagingKit's analyzer reaches MailingKit consumers. -->
     <ProjectReference Include="../../../messaging-kit/src/MessagingKit/MessagingKit.csproj" PrivateAssets="none" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics" />
     <PackageReference Include="Scriban" />
   </ItemGroup>
 
