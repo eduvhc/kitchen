@@ -327,7 +327,7 @@ builder.Services.AddOpenTelemetry()
 
 `AddMailing` wraps whichever `IEmailSender` is registered (SMTP, Resend, or your own), whether the transport is added before or after it, so a custom transport is instrumented without doing anything.
 
-An email is a message, so each send also appears inside MessagingKit's `handle send-email` consumer span when MessagingKit's tracing is on. That span covers the whole handler — templates, the send log, the send; MailingKit's span covers only the call to the provider.
+An email is a message, so each send also appears inside MessagingKit's `process send-email` span when MessagingKit's tracing is on. That span covers the whole handler — templates, the send log, the send; MailingKit's span covers only the call to the provider.
 
 OpenTelemetry has no semantic conventions for email, so the attributes use the `mailingkit.` prefix, apart from the general `error.type`.
 
