@@ -147,6 +147,32 @@ public sealed class InstrumentationTests
     }
 
     [TestMethod]
+    public async Task Json_documents_are_traced_as_puts_and_gets_without_their_content()
+    {
+        await using var provider = Build(out _);
+        var store = Store(provider);
+        using var spans = new SpanRecorder();
+        var ct = TestContext.CancellationToken;
+
+        await store.PutAsJsonAsync(SecretKey, new { Owner = "ada@example.com" }, ct: ct);
+        await store.GetFromJsonAsync<Dictionary<string, string>>(SecretKey, ct: ct);
+
+        CollectionAssert.AreEqual(
+            new[] { "put", "get" },
+            spans.Recorded.Select(s => s.GetTagItem("storingkit.operation")).ToList());
+
+        foreach (var span in spans.Recorded)
+        {
+            Assert.DoesNotContain("ada", span.DisplayName);
+
+            foreach (var (name, value) in span.TagObjects)
+            {
+                Assert.DoesNotContain("ada", value?.ToString() ?? string.Empty, $"{span.DisplayName} records {name}");
+            }
+        }
+    }
+
+    [TestMethod]
     public async Task Public_urls_need_no_request_so_get_no_span()
     {
         await using var provider = Build(out _, publicBaseUrl: new Uri("https://cdn.example.com/"));

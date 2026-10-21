@@ -326,6 +326,10 @@ public abstract class ObjectStore : IObjectStore
         _ => null,
     };
 
+    /// <summary>Classifies a failure while reading a stream <see cref="GetAsync"/> opened, after the provider has returned.</summary>
+    internal static Error? TranslateReadException(Exception exception, CancellationToken ct) =>
+        ct.IsCancellationRequested && exception is OperationCanceledException ? null : TranslateTransportException(exception);
+
     private Error? Translate(Exception exception, ObjectStoreOperation operation, string key, WriteCondition? condition, CancellationToken ct)
     {
         if (ct.IsCancellationRequested && exception is OperationCanceledException)
