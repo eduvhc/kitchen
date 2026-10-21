@@ -6,8 +6,9 @@ namespace ValidatingKit;
 
 /// <summary>
 /// A validation in progress: a value and the failures found so far. Start one with
-/// <see cref="Validation.That{T}(T, string, string)"/>, chain rules, and finish with <see cref="ToResult"/> or
-/// <see cref="ToValueResult"/>.
+/// <see cref="Validation.That{T}(T, string, string)"/> and chain rules. Return it where a <see cref="Result"/> or
+/// <see cref="Result{TValue}"/> is expected and it converts itself, or call <see cref="ToResult"/> or
+/// <see cref="ToValueResult"/> to keep chaining.
 /// </summary>
 /// <typeparam name="T">The type of the value.</typeparam>
 /// <remarks>
@@ -181,6 +182,14 @@ public readonly struct Validation<T>
 
     /// <summary>Like <see cref="ToResult"/>, but a success carries the value, so it chains with <c>Bind</c> and <c>Map</c>.</summary>
     public Result<T> ToValueResult() => ToError() is { } error ? Result<T>.Failure(error) : Result<T>.Success(_value!);
+
+    /// <summary>Finishes the validation as <see cref="ToResult"/> does, so a method returning <see cref="Result"/> can return the validation itself.</summary>
+    /// <param name="validation">The validation to finish.</param>
+    public static implicit operator Result(Validation<T> validation) => validation.ToResult();
+
+    /// <summary>Finishes the validation as <see cref="ToValueResult"/> does, so a method returning <see cref="Result{TValue}"/> can return the validation itself.</summary>
+    /// <param name="validation">The validation to finish.</param>
+    public static implicit operator Result<T>(Validation<T> validation) => validation.ToValueResult();
 
     private Error? ToError()
     {

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <!-- BenchmarkDotNet generates and builds its own project per run; it needs optimised, non-test code. -->
+    <Optimize>true</Optimize>
+    <!-- BenchmarkDotNet runs instance methods only. -->
+    <NoWarn>$(NoWarn);CA1822</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="FluentValidation" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/ValidatingKit/ValidatingKit.csproj" />
+  </ItemGroup>
+
+</Project>

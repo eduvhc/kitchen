@@ -1,12 +1,12 @@
 # ValidatingKit
 
-Small, fluent validation that returns a [ResultingKit](../resulting-kit) `Result`. Rules read like the requirement, every invalid field is reported at once under its JSON path, and a failure is an ordinary `Error` that maps to `ValidationProblemDetails` over HTTP.
+Fluent validation that returns a [ResultingKit](../resulting-kit) `Result`. Rules read like the requirement, every invalid field is reported at once under its JSON path, and a failure is an ordinary `Error` that maps to `ValidationProblemDetails` over HTTP. It runs about 7× faster than FluentValidation, and a valid value costs a single 40-byte allocation — see [Performance](#performance).
 
 ```bash
 dotnet add package ValidatingKit
 ```
 
-No dependencies beyond ResultingKit. No reflection or expression trees at validation time, and a valid value costs one small allocation.
+No dependencies beyond ResultingKit. No reflection, no expression trees, no registration: one `using ValidatingKit;` and you are writing rules.
 
 ## Before and after
 
@@ -30,9 +30,10 @@ using ValidatingKit;
 public static Result Validate(DeleteFileRequested? request) =>
     Validation.That(request, "INVALID_REQUEST")
         .Required()
-        .Field(r => r.StorageId, f => f.NotBlank())
-        .ToResult();
+        .Field(r => r.StorageId, f => f.NotBlank());
 ```
+
+A validation converts itself to a `Result` or `Result<T>` wherever one is expected, so there is nothing to finish. `ToResult()` and `ToValueResult()` do the same explicitly, for when you keep chaining. The code is optional too: leave it out and failures carry `validation.failed`.
 
 A blank `StorageId` fails with:
 
@@ -153,7 +154,7 @@ builder.Services.AddSingleton<IValidator<Line>, LineValidator>();
 
 ## Results
 
-`ToResult()` returns a `Result`: the shared `Result.Success()`, or a failure with an `ErrorKind.Validation` error. `ToValueResult()` returns a `Result<T>` carrying the value, so validation chains straight into the next step:
+Return a validation from a method typed `Result` or `Result<T>` and it converts itself. Otherwise `ToResult()` returns a `Result`: the shared `Result.Success()`, or a failure with an `ErrorKind.Validation` error. `ToValueResult()` returns a `Result<T>` carrying the value, so validation chains straight into the next step:
 
 ```csharp
 public Task<Result<Receipt>> HandleAsync(PlaceOrder? command, CancellationToken ct) =>
@@ -181,14 +182,53 @@ With `ResultingKit.AspNetCore`, a validation failure becomes a `ValidationProble
 }
 ```
 
-## Cost
+## Performance
 
-Validation runs on every request or message, so the hot path stays lean:
+Validation runs on every request and every message, so it is built to cost next to nothing. Measured with [BenchmarkDotNet](benchmarks/ValidatingKit.Benchmarks) against FluentValidation 12.2 with the same rules and the same stop-at-first-failure-per-field behaviour, on .NET 10:
 
-- A `Validation<T>` and each `Field<T>` are structs. A valid value allocates one 40-byte collector, however many fields, nested objects and elements it checks, and `ToResult()` returns the shared success. A unit test pins this.
-- Rule lambdas that capture nothing are cached by the compiler. Capturing a local, such as `f => f.GreaterThan(min)`, allocates a closure per call; prefer the two-argument `Field` overload to read sibling values.
-- Field names are derived once per selector and cached. Paths for nested members and elements are built only when something fails.
-- Default messages are formatted only on failure.
+| Case | ValidatingKit | FluentValidation | Faster | ValidatingKit allocates | FluentValidation allocates |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Simple, valid | 7.6 ns | 57.3 ns | 7.5× | 40 B | 632 B |
+| Simple, invalid | 64.3 ns | 416.1 ns | 6.5× | 472 B | 1,816 B |
+| Order, valid | 186.7 ns | 1,459.7 ns | 7.8× | 40 B | 6,032 B |
+| Order, invalid | 667.5 ns | 4,639.7 ns | 7.0× | 2,656 B | 17,080 B |
+
+BenchmarkDotNet 0.15.8, .NET 10.0.13, AMD Ryzen 9 9950X3D. Absolute numbers move with the machine; the ratios are what to look at. For scale, the hand-written validator from the top of this page takes 2.2 ns valid and 17.5 ns invalid, so on a valid value ValidatingKit costs about 5 ns more than writing the `if` yourself.
+
+*Simple* is the `DeleteFileRequested` example above. *Order* checks 7 fields, a nested address, and 5 order lines through a reusable `Validator<Line>` (19 fields in all); the invalid order fails 9 of them.
+
+Where the speed comes from:
+
+- **No allocation while validating.** `Validation<T>` and `Field<T>` are readonly structs that share one 40-byte failure collector, however many fields, nested objects and elements are checked. A valid value returns the shared `Result.Success()`. A unit test pins the 40 bytes.
+- **Names without reflection.** The compiler hands over each selector's source text (`CallerArgumentExpression`); it is parsed once, and later calls find it by the reference of the interned literal in a lock-free slot table — no hashing, no expression trees.
+- **Nothing is built until something fails.** Paths for nested members and elements, default messages and the joined `Message` are produced only on failure, then formatted without boxing into exactly-sized strings and an array-backed field map.
+- **Tight loops.** Arrays and `List<T>` are walked as spans, `Email()` is vectorised, and generic null checks are written so the JIT removes them for value types.
+
+Two habits keep it that way in your code: write rule lambdas that capture nothing (read sibling values with the two-argument `Field` overload rather than closing over a local), and prefer a `[GeneratedRegex]` to `Matches("pattern")`.
+
+Run the benchmarks yourself:
+
+```bash
+dotnet run -c Release --project kits/validating-kit/benchmarks/ValidatingKit.Benchmarks -- --filter '*'
+```
+
+## Coming from FluentValidation
+
+| FluentValidation | ValidatingKit |
+| --- | --- |
+| `class X : AbstractValidator<T>` with `RuleFor` in the constructor | `class X : Validator<T>` overriding `Apply`, or `Validation.That(value)` inline |
+| `RuleFor(x => x.Name).NotEmpty()` | `.Field(x => x.Name, f => f.NotBlank())` |
+| `NotNull()` | `Required()` |
+| `NotEmpty()` on a collection or `Guid` | `NotEmpty()` |
+| `MaximumLength(n)`, `MinimumLength(n)`, `Length(min, max)` | `MaxLength(n)`, `MinLength(n)`, `Length(min, max)` |
+| `InclusiveBetween(a, b)` | `Between(a, b)` |
+| `EmailAddress()`, `Matches(...)`, `IsInEnum()` | `Email()`, `Matches(...)`, `IsInEnum()` |
+| `.WithMessage("...")` | the rule's `message` argument: `NotBlank("Name it.")` |
+| `.When(x => ...)` | `.When(x => ..., v => v.Field(...))`, or `(f, x) => x.Flag ? f.NotBlank() : f` |
+| `SetValidator(new AddressValidator())` | `Valid(addressValidator)` |
+| `RuleForEach(x => x.Lines)` | `.Field(x => x.Lines, f => f.Each(l => ...))` |
+| `ValidationResult.Errors` | `Error.FieldErrors`, already shaped for `ValidationProblemDetails` |
+| `MustAsync`, `ValidateAsync` | not offered; do I/O in the handler (see below) |
 
 ## Not included
 
@@ -198,4 +238,4 @@ Validation runs on every request or message, so the hot path stays lean:
 
 ## Tests
 
-`ValidatingKit.UnitTests` covers every rule, paths, nesting, collections, conditions, message joining and the `Result` integration. The kit has no infrastructure, so there is no integration suite.
+`ValidatingKit.UnitTests` covers every rule, paths, nesting, collections, conditions, message joining, the `Result` integration, the allocation budget and the examples in this README. The kit has no infrastructure, so there is no integration suite. `benchmarks/ValidatingKit.Benchmarks` holds the comparison above.

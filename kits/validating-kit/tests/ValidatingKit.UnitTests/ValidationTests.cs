@@ -289,4 +289,43 @@ public sealed class ValidationTests
         Assert.ThrowsExactly<ArgumentNullException>(() => validation.When(_ => true, null!));
         Assert.ThrowsExactly<ArgumentNullException>(() => validation.Include(null!));
     }
+
+    [TestMethod]
+    public void A_validation_converts_to_a_result_where_one_is_expected()
+    {
+        static Result Check(DeleteFileRequested? request) =>
+            Validation.That(request, "INVALID_REQUEST").Field(r => r.StorageId, f => f.NotBlank());
+
+        Assert.AreSame(Result.Success(), Check(new DeleteFileRequested("s-1")));
+        Assert.AreEqual("storageId: Must not be blank.", Check(new DeleteFileRequested("")).Error!.Message);
+    }
+
+    [TestMethod]
+    public void A_validation_converts_to_a_value_result_where_one_is_expected()
+    {
+        static Result<Order> Check(Order? order) => Validation.That(order).Field(o => o.Name, f => f.NotBlank());
+
+        var order = new Order { Name = "Tea" };
+
+        Assert.AreSame(order, Check(order).Value);
+        Assert.IsTrue(Check(new Order()).IsFailure);
+    }
+
+    [TestMethod]
+    public async Task A_validation_converts_inside_an_async_method()
+    {
+        static async Task<Result> CheckAsync(Order order)
+        {
+            await Task.Yield();
+            return Validation.That(order).Field(o => o.Name, f => f.NotBlank());
+        }
+
+        Assert.IsTrue((await CheckAsync(new Order())).IsFailure);
+    }
+
+    [TestMethod]
+    public void Code_defaults_to_validation_failed()
+    {
+        Assert.AreEqual("validation.failed", Validation.That((Order?)null).ToResult().Error!.Code);
+    }
 }

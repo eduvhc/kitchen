@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 namespace ValidatingKit;
@@ -9,9 +10,35 @@ namespace ValidatingKit;
 /// </summary>
 internal static class FieldNames
 {
-    private static readonly ConcurrentDictionary<string, string> s_selectors = new(StringComparer.Ordinal);
+    // The compiler passes selector text as a literal, so the same interned instance arrives on every call. A slot
+    // table keyed by that reference answers without hashing the text, locking or allocating; a miss, a collision or
+    // a non-literal falls back to the ordinal dictionary, which is always correct.
+    private const int SlotMask = 2047;
+    private static readonly Entry?[] s_slots = new Entry?[SlotMask + 1];
+    private static readonly ConcurrentDictionary<string, Entry> s_selectors = new(StringComparer.Ordinal);
 
-    public static string FromSelector(string expression) => s_selectors.GetOrAdd(expression, static e => Parse(e));
+    public static string FromSelector(string expression)
+    {
+        var slot = RuntimeHelpers.GetHashCode(expression) & SlotMask;
+        if (s_slots[slot] is { } hit && ReferenceEquals(hit.Expression, expression))
+        {
+            return hit.Name;
+        }
+
+        var neighbour = slot ^ 1;
+        if (s_slots[neighbour] is { } near && ReferenceEquals(near.Expression, expression))
+        {
+            return near.Name;
+        }
+
+        var entry = s_selectors.GetOrAdd(expression, static e => new Entry(e, Parse(e)));
+        if (ReferenceEquals(entry.Expression, expression))
+        {
+            s_slots[s_slots[slot] is null || s_slots[neighbour] is not null ? slot : neighbour] = entry;
+        }
+
+        return entry.Name;
+    }
 
     /// <summary>Returns the name for a validated value itself: the argument text if it is a plain name, else <c>value</c>.</summary>
     public static string ForRoot(string expression)
@@ -94,5 +121,12 @@ internal static class FieldNames
         }
 
         return true;
+    }
+
+    private sealed class Entry(string expression, string name)
+    {
+        public string Expression { get; } = expression;
+
+        public string Name { get; } = name;
     }
 }

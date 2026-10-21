@@ -1,0 +1,7 @@
+<Project>
+
+  <!-- Benchmarks are never shipped; they get the test rules. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+  <Import Project="$(MSBuildThisFileDirectory)../../../Directory.Tests.props" />
+
+</Project>

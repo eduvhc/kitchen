@@ -105,6 +105,7 @@ public sealed partial class StringRulesTests
     [DataRow("a@b")]
     [DataRow("first.last+tag@example.co.uk")]
     [DataRow("\"quoted\"@example.com")]
+    [DataRow("josé@exemplo.pt")]
     public void Email_accepts_address_shapes(string value)
     {
         Passes(value, f => f.Email());
@@ -121,6 +122,9 @@ public sealed partial class StringRulesTests
     [DataRow("ab@.example.com")]
     [DataRow("ab@example.com.")]
     [DataRow("ab\n@example.com")]
+    [DataRow("a b@example.com")]
+    [DataRow("ab\u0085@example.com")]
+    [DataRow("ab@exa mple.com")]
     public void Email_rejects_non_addresses(string value)
     {
         Fails(value, f => f.Email(), "Must be a valid email address.");

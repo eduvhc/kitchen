@@ -42,8 +42,22 @@ public sealed class ValidatorTests
         Assert.AreEqual("quantity: Must be greater than 0.", Check(new LineValidator()));
     }
 
+    private sealed class Defaulted : Validator<Order>
+    {
+        public override Validation<Order> Apply(Validation<Order> validation) => validation.Field(o => o.Name, f => f.NotBlank());
+    }
+
     [TestMethod]
-    public void Code_is_required()
+    public void Code_defaults_to_validation_failed()
+    {
+        var validator = new Defaulted();
+
+        Assert.AreEqual(Validation.DefaultCode, validator.Code);
+        Assert.AreEqual(Validation.DefaultCode, validator.Validate(new Order()).Error!.Code);
+    }
+
+    [TestMethod]
+    public void Code_cannot_be_empty()
     {
         Assert.ThrowsExactly<ArgumentException>(() => new Empty());
     }

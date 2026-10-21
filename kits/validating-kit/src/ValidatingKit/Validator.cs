@@ -25,6 +25,11 @@ public abstract class Validator<T> : IValidator<T>
 {
     private static readonly string s_name = FieldNames.ForType(typeof(T));
 
+    /// <summary>Creates a validator whose failures carry <see cref="Validation.DefaultCode"/>.</summary>
+    protected Validator() : this(Validation.DefaultCode)
+    {
+    }
+
     /// <summary>Creates a validator whose failures carry <paramref name="code"/>.</summary>
     /// <param name="code">The <see cref="Error.Code"/> of the error a failure produces.</param>
     /// <exception cref="ArgumentException"><paramref name="code"/> is <see langword="null"/> or empty.</exception>

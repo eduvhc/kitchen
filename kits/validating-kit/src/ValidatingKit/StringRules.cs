@@ -120,11 +120,17 @@ public static class StringRules
             return false;
         }
 
-        foreach (var c in value)
+        // Printable ASCII has no white space or control characters, and the check is vectorised; only text outside
+        // it needs the per-character test.
+        var text = value.AsSpan();
+        if (text.IndexOfAnyExceptInRange('!', '~') >= 0)
         {
-            if (char.IsWhiteSpace(c) || char.IsControl(c))
+            foreach (var c in text)
             {
-                return false;
+                if (char.IsWhiteSpace(c) || char.IsControl(c))
+                {
+                    return false;
+                }
             }
         }
 

@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Runtime.InteropServices;
 
 namespace ValidatingKit;
 
@@ -139,6 +140,23 @@ public readonly struct Field<TProp>
 
         switch (Value)
         {
+            case TItem[] array:
+                for (var i = 0; i < array.Length; i++)
+                {
+                    rules(new Field<TItem>(array[i], parent, _failures, i));
+                }
+
+                break;
+
+            case List<TItem> list:
+                var span = CollectionsMarshal.AsSpan(list);
+                for (var i = 0; i < span.Length; i++)
+                {
+                    rules(new Field<TItem>(span[i], parent, _failures, i));
+                }
+
+                break;
+
             case IList<TItem> list:
                 for (var i = 0; i < list.Count; i++)
                 {

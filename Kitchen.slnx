@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/benchmarks/">
+    <Project Path="kits/validating-kit/benchmarks/ValidatingKit.Benchmarks/ValidatingKit.Benchmarks.csproj" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="kits/mailing-kit/src/MailingKit.Resend/MailingKit.Resend.csproj" />
     <Project Path="kits/mailing-kit/src/MailingKit.Smtp/MailingKit.Smtp.csproj" />
