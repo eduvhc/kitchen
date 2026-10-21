@@ -135,9 +135,46 @@ To see what was generated, set `<EmitCompilerGeneratedFiles>true</EmitCompilerGe
 
 ## Performance
 
-BenchmarkDotNet, .NET 10, each library called through its `IMediator` interface, resolved once. Handlers return cached responses, so the numbers are the mediators' own cost. MediatingKit runs scoped (its default, resolved from one scope), Mediator singleton, MediatR with its defaults (transient handlers).
+BenchmarkDotNet 0.15.8, .NET 10.0.13, AMD Ryzen 9 9950X3D. Each library is called through its `IMediator` interface, resolved once; handlers return cached responses, so the numbers are the mediators' own cost. MediatingKit runs scoped (its default, resolved from one scope), Mediator 3.0.2 singleton, MediatR 14.2.0 with its defaults. MediatingKit's telemetry is on, with nobody listening.
 
-BENCHMARK_TABLE
+| Send | Mean | Allocated |
+| --- | ---: | ---: |
+| Direct handler call | 0.18 ns | - |
+| **MediatingKit** | **4.91 ns** | **-** |
+| Mediator | 4.39 ns | - |
+| MediatR | 30.85 ns | 128 B |
+
+| Send through one pass-through behavior | Mean | Allocated |
+| --- | ---: | ---: |
+| Direct handler call | 0.21 ns | - |
+| **MediatingKit** | **6.81 ns** | **-** |
+| Mediator | 7.99 ns | - |
+| MediatR | 55.28 ns | 368 B |
+
+| Publish to two handlers | Mean | Allocated |
+| --- | ---: | ---: |
+| Direct handler calls | 3.25 ns | - |
+| **MediatingKit** | **4.15 ns** | **-** |
+| Mediator | 5.69 ns | - |
+| MediatR | 137.49 ns | 1008 B |
+
+| One send from a fresh scope | Mean | Allocated |
+| --- | ---: | ---: |
+| **MediatingKit**, scoped (default) | **97.29 ns** | **416 B** |
+| **MediatingKit**, singleton | **40.88 ns** | **128 B** |
+| Mediator, singleton | 41.43 ns | 128 B |
+| MediatR | 72.63 ns | 400 B |
+
+| Telemetry | Mean | Allocated |
+| --- | ---: | ---: |
+| Send, nobody listening | 4.98 ns | - |
+| Send, a tracer sampling every span and a meter listener attached | 189.37 ns | 576 B |
+
+What the numbers say:
+
+- **Through `IMediator`, most of a send is the call itself.** `Send<TResponse>` is a generic virtual method on an interface, and resolving one costs about 3.4 ns on .NET 10 for any library with this API shape. Mediator spends about 1 ns after that, MediatingKit about 1.5 ns. The difference is MediatingKit's listener check, which lets telemetry switch on at run time; Mediator decides at compile time whether to instrument at all.
+- **Behaviors and notifications are where generation pays.** The outermost behavior is called directly with the rest of the chain as `next`, and each notification's handlers are typed fields called one after another, so both beat Mediator, and neither allocates.
+- **A scoped mediator costs a mediator and a handler per scope**, plus the container's bookkeeping for scoped services, which a real request scope has already paid for once it resolves a `DbContext`. With `o.Lifetime = ServiceLifetime.Singleton` it costs nothing beyond the scope itself.
 
 Run them with:
 
