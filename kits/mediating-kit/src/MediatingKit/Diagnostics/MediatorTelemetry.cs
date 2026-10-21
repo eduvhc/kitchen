@@ -41,8 +41,11 @@ internal sealed class MediatorTelemetry
             advice: new InstrumentAdvice<double> { HistogramBucketBoundaries = DurationBuckets });
     }
 
-    /// <summary>Whether anything listens. Checked on every call, so it stays a few field reads.</summary>
-    public bool IsActive => _dispatches.Enabled || _duration.Enabled || MediatingKitInstrumentation.ActivitySource.HasListeners();
+    /// <summary>The counter, which the mediator checks for listeners directly on every call.</summary>
+    public Counter<long> Dispatches => _dispatches;
+
+    /// <summary>The histogram, which the mediator checks for listeners directly on every call.</summary>
+    public Histogram<double> Duration => _duration;
 
     public Operation Start(string operation, string spanName, string messageType)
     {

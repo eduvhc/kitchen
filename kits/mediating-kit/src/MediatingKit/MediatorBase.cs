@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.Metrics;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -16,6 +17,11 @@ public abstract class MediatorBase : IMediator
     private readonly MediatorRuntime _runtime;
     private readonly bool _sequential;
 
+    // The instruments themselves rather than the telemetry object, so the per-call listener check is three short,
+    // independent reads instead of one long chain.
+    private readonly Counter<long> _dispatches;
+    private readonly Histogram<double> _duration;
+
     /// <summary>Creates the mediator over the container or scope it was resolved from.</summary>
     /// <param name="services">The container or scope that resolves handlers and behaviors.</param>
     protected MediatorBase(IServiceProvider services)
@@ -25,19 +31,22 @@ public abstract class MediatorBase : IMediator
         Services = services;
         _runtime = services.GetRequiredService<MediatorRuntime>();
         _sequential = _runtime.NotificationPublishing == NotificationPublishing.Sequential;
+        _dispatches = _runtime.Telemetry.Dispatches;
+        _duration = _runtime.Telemetry.Duration;
     }
 
     /// <summary>The container or scope that resolves handlers and behaviors.</summary>
     protected IServiceProvider Services { get; }
 
     /// <summary>Whether a span or metric listener is attached. Checked per call.</summary>
-    protected bool IsInstrumented => _runtime.Telemetry.IsActive;
+    protected bool IsInstrumented =>
+        _dispatches.Enabled || _duration.Enabled || MediatingKitInstrumentation.ActivitySource.HasListeners();
 
     /// <summary>
     /// Whether a publish can call its handlers one after another from generated code: sequential publishing, and
     /// nobody listening. Otherwise it goes through <see cref="PublishToHandlers{TNotification}"/>.
     /// </summary>
-    protected bool PublishesInline => _sequential && !_runtime.Telemetry.IsActive;
+    protected bool PublishesInline => _sequential && !IsInstrumented;
 
     /// <inheritdoc />
     public abstract ValueTask<TResponse> Send<TResponse>(IRequest<TResponse> request, CancellationToken ct = default);
@@ -70,8 +79,8 @@ public abstract class MediatorBase : IMediator
     {
         ArgumentNullException.ThrowIfNull(handler);
 
-        var (invoke, hasBehaviors) = Chain<TRequest, TResponse>(handler.Handle);
-        return new RequestPipeline<THandler, TRequest, TResponse>(handler, invoke, hasBehaviors);
+        var (invoke, first, next) = Chain<TRequest, TResponse>(handler.Handle);
+        return new RequestPipeline<THandler, TRequest, TResponse>(handler, invoke, first, next);
     }
 
     /// <summary>Resolves the behaviors for a request type without a response and chains them in front of its handler.</summary>
@@ -85,11 +94,11 @@ public abstract class MediatorBase : IMediator
     {
         ArgumentNullException.ThrowIfNull(handler);
 
-        var (invoke, hasBehaviors) = Chain<TRequest, Unit>((request, ct) => ToUnit(handler.Handle(request, ct)));
-        return new VoidRequestPipeline<THandler, TRequest>(handler, invoke, hasBehaviors);
+        var (invoke, first, next) = Chain<TRequest, Unit>((request, ct) => ToUnit(handler.Handle(request, ct)));
+        return new VoidRequestPipeline<THandler, TRequest>(handler, invoke, first, next);
     }
 
-    /// <summary>Runs a pipeline that has behaviors, or any pipeline while telemetry is listening.</summary>
+    /// <summary>Runs a pipeline inside a span and measurement while telemetry is listening.</summary>
     /// <typeparam name="TRequest">The request type.</typeparam>
     /// <typeparam name="TResponse">The response type.</typeparam>
     /// <param name="invoke">The pipeline's entry point.</param>
@@ -107,7 +116,7 @@ public abstract class MediatorBase : IMediator
     {
         ArgumentNullException.ThrowIfNull(invoke);
 
-        return _runtime.Telemetry.IsActive
+        return IsInstrumented
             ? DispatchInstrumented(invoke, request, spanName, messageType, ct)
             : invoke(request, ct);
     }
@@ -130,7 +139,7 @@ public abstract class MediatorBase : IMediator
     {
         ArgumentNullException.ThrowIfNull(handlers);
 
-        return _runtime.Telemetry.IsActive
+        return IsInstrumented
             ? PublishInstrumented(handlers, notification, spanName, messageType, ct)
             : PublishCore(handlers, notification, ct);
     }
@@ -214,20 +223,30 @@ public abstract class MediatorBase : IMediator
             + "references. A handler in a project that is neither is invisible to this mediator.");
     }
 
-    private (PipelineNext<TRequest, TResponse> Invoke, bool HasBehaviors) Chain<TRequest, TResponse>(PipelineNext<TRequest, TResponse> handler)
+    /// <summary>
+    /// Chains the behaviors in front of <paramref name="handler"/>. Returns the whole chain, for the instrumented path,
+    /// and separately the outermost behavior and the chain after it, so the generated code calls that behavior directly.
+    /// </summary>
+    private (PipelineNext<TRequest, TResponse> Invoke, IPipelineBehavior<TRequest, TResponse>? First, PipelineNext<TRequest, TResponse> Next) Chain<TRequest, TResponse>(
+        PipelineNext<TRequest, TResponse> handler)
         where TRequest : notnull
     {
         var resolved = Services.GetServices<IPipelineBehavior<TRequest, TResponse>>();
         var behaviors = resolved as IPipelineBehavior<TRequest, TResponse>[] ?? [.. resolved];
 
-        var invoke = handler;
-
-        for (var i = behaviors.Length - 1; i >= 0; i--)
+        if (behaviors.Length == 0)
         {
-            invoke = Wrap(behaviors[i], invoke);
+            return (handler, null, handler);
         }
 
-        return (invoke, behaviors.Length > 0);
+        var next = handler;
+
+        for (var i = behaviors.Length - 1; i > 0; i--)
+        {
+            next = Wrap(behaviors[i], next);
+        }
+
+        return (Wrap(behaviors[0], next), behaviors[0], next);
 
         static PipelineNext<TRequest, TResponse> Wrap(IPipelineBehavior<TRequest, TResponse> behavior, PipelineNext<TRequest, TResponse> next) =>
             (request, ct) => behavior.Handle(request, next, ct);

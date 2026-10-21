@@ -15,21 +15,25 @@ public sealed class RequestPipeline<THandler, TRequest, TResponse>
     where THandler : class, IRequestHandler<TRequest, TResponse>
     where TRequest : IRequest<TResponse>
 {
-    internal RequestPipeline(THandler handler, PipelineNext<TRequest, TResponse> invoke, bool hasBehaviors)
+    internal RequestPipeline(THandler handler, PipelineNext<TRequest, TResponse> invoke, IPipelineBehavior<TRequest, TResponse>? first, PipelineNext<TRequest, TResponse> next)
     {
         Handler = handler;
         Invoke = invoke;
-        HasBehaviors = hasBehaviors;
+        First = first;
+        Next = next;
     }
 
     /// <summary>The handler.</summary>
     public THandler Handler { get; }
 
-    /// <summary>The first behavior, or the handler itself when there are none.</summary>
+    /// <summary>The whole chain: every behavior, then the handler. Used when telemetry wraps the call.</summary>
     public PipelineNext<TRequest, TResponse> Invoke { get; }
 
-    /// <summary>Whether any behavior applies; when not, the handler can be called directly.</summary>
-    public bool HasBehaviors { get; }
+    /// <summary>The outermost behavior, or <see langword="null"/> when none applies and the handler is called directly.</summary>
+    public IPipelineBehavior<TRequest, TResponse>? First { get; }
+
+    /// <summary>The chain after <see cref="First"/>: the <c>next</c> it is called with.</summary>
+    public PipelineNext<TRequest, TResponse> Next { get; }
 }
 
 /// <summary>
@@ -43,19 +47,23 @@ public sealed class VoidRequestPipeline<THandler, TRequest>
     where THandler : class, IRequestHandler<TRequest>
     where TRequest : IRequest
 {
-    internal VoidRequestPipeline(THandler handler, PipelineNext<TRequest, Unit> invoke, bool hasBehaviors)
+    internal VoidRequestPipeline(THandler handler, PipelineNext<TRequest, Unit> invoke, IPipelineBehavior<TRequest, Unit>? first, PipelineNext<TRequest, Unit> next)
     {
         Handler = handler;
         Invoke = invoke;
-        HasBehaviors = hasBehaviors;
+        First = first;
+        Next = next;
     }
 
     /// <summary>The handler.</summary>
     public THandler Handler { get; }
 
-    /// <summary>The first behavior, or the handler itself when there are none.</summary>
+    /// <summary>The whole chain: every behavior, then the handler. Used when telemetry wraps the call.</summary>
     public PipelineNext<TRequest, Unit> Invoke { get; }
 
-    /// <summary>Whether any behavior applies; when not, the handler can be called directly.</summary>
-    public bool HasBehaviors { get; }
+    /// <summary>The outermost behavior, or <see langword="null"/> when none applies and the handler is called directly.</summary>
+    public IPipelineBehavior<TRequest, Unit>? First { get; }
+
+    /// <summary>The chain after <see cref="First"/>: the <c>next</c> it is called with.</summary>
+    public PipelineNext<TRequest, Unit> Next { get; }
 }

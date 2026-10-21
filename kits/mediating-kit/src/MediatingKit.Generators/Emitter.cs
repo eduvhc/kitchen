@@ -245,11 +245,9 @@ internal static class Emitter
             var response = handler.Kind == HandlerKind.VoidRequest ? Unit : handler.ResponseType;
             var call = handler.Kind == HandlerKind.VoidRequest ? $"ToUnit(Send{i}(r{i}, ct))" : $"Send{i}(r{i}, ct)";
 
+            // BitCast retypes the value; Unsafe.As over a local would force it through a stack slot first.
             w.Line($"if (request is {handler.MessagePattern} r{i}{ResponseGuard(handler)})");
-            w.Open();
-            w.Line($"var response = {call};");
-            w.Line($"return global::System.Runtime.CompilerServices.Unsafe.As<global::System.Threading.Tasks.ValueTask<{response}>, global::System.Threading.Tasks.ValueTask<TResponse>>(ref response);");
-            w.Close();
+            w.Line($"    return global::System.Runtime.CompilerServices.Unsafe.BitCast<global::System.Threading.Tasks.ValueTask<{response}>, global::System.Threading.Tasks.ValueTask<TResponse>>({call});");
             w.Line();
         }
 
@@ -287,40 +285,52 @@ internal static class Emitter
         w.Close();
     }
 
+    /// <summary>
+    /// One method per request type: the listener check, then the first behavior or the handler, with building the
+    /// pipeline and the instrumented path out of line. It is deliberately not inlined into <c>Send</c>: compiled on
+    /// its own it writes the response straight into the caller's return buffer, whereas inlined, the JIT merges the
+    /// three paths through a stack temporary whose copy-out stalls on store forwarding, costing more than the call.
+    /// </summary>
     private static void WriteRequestCases(CodeWriter w, List<HandlerInfo> requests)
     {
+        const string NoInline = "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]";
+
         for (var i = 0; i < requests.Count; i++)
         {
             var handler = requests[i];
+            var isVoid = handler.Kind == HandlerKind.VoidRequest;
             var holder = handler.ExportAccessor is null ? handler.HandlerType : handler.InterfaceType;
-            var resolve = Resolve(handler);
-            var span = Literal("send " + handler.MessageName);
-            var type = Literal(handler.MessageFullName);
+            var pipelineType = isVoid
+                ? $"global::MediatingKit.VoidRequestPipeline<{holder}, {handler.MessageType}>"
+                : $"global::MediatingKit.RequestPipeline<{holder}, {handler.MessageType}, {handler.ResponseType}>";
+            var create = isVoid
+                ? $"CreateVoidPipeline<{holder}, {handler.MessageType}>({Resolve(handler)})"
+                : $"CreatePipeline<{holder}, {handler.MessageType}, {handler.ResponseType}>({Resolve(handler)})";
+            var returns = isVoid
+                ? "global::System.Threading.Tasks.ValueTask"
+                : $"global::System.Threading.Tasks.ValueTask<{handler.ResponseType}>";
+            var dispatch = $"Dispatch(pipeline.Invoke, request, {Literal("send " + handler.MessageName)}, {Literal(handler.MessageFullName)}, ct)";
 
             w.Line();
-
-            if (handler.Kind == HandlerKind.VoidRequest)
-            {
-                w.Line($"private global::MediatingKit.VoidRequestPipeline<{holder}, {handler.MessageType}>? _request{i};");
-                w.Line();
-                w.Line($"private global::System.Threading.Tasks.ValueTask Send{i}({handler.MessageType} request, global::System.Threading.CancellationToken ct)");
-                w.Open();
-                w.Line($"var pipeline = _request{i} ??= CreateVoidPipeline<{holder}, {handler.MessageType}>({resolve});");
-                w.Line($"if (pipeline.HasBehaviors || IsInstrumented) return ToValueTask(Dispatch(pipeline.Invoke, request, {span}, {type}, ct));");
-                w.Line($"return (({handler.InterfaceType})pipeline.Handler).Handle(request, ct);");
-                w.Close();
-            }
-            else
-            {
-                w.Line($"private global::MediatingKit.RequestPipeline<{holder}, {handler.MessageType}, {handler.ResponseType}>? _request{i};");
-                w.Line();
-                w.Line($"private global::System.Threading.Tasks.ValueTask<{handler.ResponseType}> Send{i}({handler.MessageType} request, global::System.Threading.CancellationToken ct)");
-                w.Open();
-                w.Line($"var pipeline = _request{i} ??= CreatePipeline<{holder}, {handler.MessageType}, {handler.ResponseType}>({resolve});");
-                w.Line($"if (pipeline.HasBehaviors || IsInstrumented) return Dispatch(pipeline.Invoke, request, {span}, {type}, ct);");
-                w.Line($"return (({handler.InterfaceType})pipeline.Handler).Handle(request, ct);");
-                w.Close();
-            }
+            w.Line($"private {pipelineType}? _request{i};");
+            w.Line();
+            w.Line(NoInline);
+            w.Line($"private {returns} Send{i}({handler.MessageType} request, global::System.Threading.CancellationToken ct)");
+            w.Open();
+            w.Line($"var pipeline = _request{i} ?? CreateRequest{i}();");
+            w.Line($"if (IsInstrumented) return Instrumented{i}(pipeline, request, ct);");
+            w.Line(isVoid
+                ? "if (pipeline.First is { } first) return ToValueTask(first.Handle(request, pipeline.Next, ct));"
+                : "if (pipeline.First is { } first) return first.Handle(request, pipeline.Next, ct);");
+            w.Line($"return (({handler.InterfaceType})pipeline.Handler).Handle(request, ct);");
+            w.Close();
+            w.Line();
+            w.Line(NoInline);
+            w.Line($"private {pipelineType} CreateRequest{i}() => _request{i} ??= {create};");
+            w.Line();
+            w.Line(NoInline);
+            w.Line($"private {returns} Instrumented{i}({pipelineType} pipeline, {handler.MessageType} request, global::System.Threading.CancellationToken ct) =>");
+            w.Line(isVoid ? $"    ToValueTask({dispatch});" : $"    {dispatch};");
         }
     }
 

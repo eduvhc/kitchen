@@ -41,16 +41,10 @@ namespace MediatingKit.Generated
         public override global::System.Threading.Tasks.ValueTask<TResponse> Send<TResponse>(global::MediatingKit.IRequest<TResponse> request, global::System.Threading.CancellationToken ct = default)
         {
             if (request is global::Files.Touch r0)
-            {
-                var response = ToUnit(Send0(r0, ct));
-                return global::System.Runtime.CompilerServices.Unsafe.As<global::System.Threading.Tasks.ValueTask<global::MediatingKit.Unit>, global::System.Threading.Tasks.ValueTask<TResponse>>(ref response);
-            }
+                return global::System.Runtime.CompilerServices.Unsafe.BitCast<global::System.Threading.Tasks.ValueTask<global::MediatingKit.Unit>, global::System.Threading.Tasks.ValueTask<TResponse>>(ToUnit(Send0(r0, ct)));
 
             if (request is global::Files.DeleteFile r1)
-            {
-                var response = Send1(r1, ct);
-                return global::System.Runtime.CompilerServices.Unsafe.As<global::System.Threading.Tasks.ValueTask<bool>, global::System.Threading.Tasks.ValueTask<TResponse>>(ref response);
-            }
+                return global::System.Runtime.CompilerServices.Unsafe.BitCast<global::System.Threading.Tasks.ValueTask<bool>, global::System.Threading.Tasks.ValueTask<TResponse>>(Send1(r1, ct));
 
             return ThrowNoHandler<global::System.Threading.Tasks.ValueTask<TResponse>>(request);
         }
@@ -63,21 +57,39 @@ namespace MediatingKit.Generated
 
         private global::MediatingKit.VoidRequestPipeline<global::Files.TouchHandler, global::Files.Touch>? _request0;
 
+        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private global::System.Threading.Tasks.ValueTask Send0(global::Files.Touch request, global::System.Threading.CancellationToken ct)
         {
-            var pipeline = _request0 ??= CreateVoidPipeline<global::Files.TouchHandler, global::Files.Touch>(GetHandler<global::Files.TouchHandler>());
-            if (pipeline.HasBehaviors || IsInstrumented) return ToValueTask(Dispatch(pipeline.Invoke, request, "send Touch", "Files.Touch", ct));
+            var pipeline = _request0 ?? CreateRequest0();
+            if (IsInstrumented) return Instrumented0(pipeline, request, ct);
+            if (pipeline.First is { } first) return ToValueTask(first.Handle(request, pipeline.Next, ct));
             return ((global::MediatingKit.IRequestHandler<global::Files.Touch>)pipeline.Handler).Handle(request, ct);
         }
 
+        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private global::MediatingKit.VoidRequestPipeline<global::Files.TouchHandler, global::Files.Touch> CreateRequest0() => _request0 ??= CreateVoidPipeline<global::Files.TouchHandler, global::Files.Touch>(GetHandler<global::Files.TouchHandler>());
+
+        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private global::System.Threading.Tasks.ValueTask Instrumented0(global::MediatingKit.VoidRequestPipeline<global::Files.TouchHandler, global::Files.Touch> pipeline, global::Files.Touch request, global::System.Threading.CancellationToken ct) =>
+            ToValueTask(Dispatch(pipeline.Invoke, request, "send Touch", "Files.Touch", ct));
+
         private global::MediatingKit.RequestPipeline<global::Files.DeleteFileHandler, global::Files.DeleteFile, bool>? _request1;
 
+        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
         private global::System.Threading.Tasks.ValueTask<bool> Send1(global::Files.DeleteFile request, global::System.Threading.CancellationToken ct)
         {
-            var pipeline = _request1 ??= CreatePipeline<global::Files.DeleteFileHandler, global::Files.DeleteFile, bool>(GetHandler<global::Files.DeleteFileHandler>());
-            if (pipeline.HasBehaviors || IsInstrumented) return Dispatch(pipeline.Invoke, request, "send DeleteFile", "Files.DeleteFile", ct);
+            var pipeline = _request1 ?? CreateRequest1();
+            if (IsInstrumented) return Instrumented1(pipeline, request, ct);
+            if (pipeline.First is { } first) return first.Handle(request, pipeline.Next, ct);
             return ((global::MediatingKit.IRequestHandler<global::Files.DeleteFile, bool>)pipeline.Handler).Handle(request, ct);
         }
+
+        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private global::MediatingKit.RequestPipeline<global::Files.DeleteFileHandler, global::Files.DeleteFile, bool> CreateRequest1() => _request1 ??= CreatePipeline<global::Files.DeleteFileHandler, global::Files.DeleteFile, bool>(GetHandler<global::Files.DeleteFileHandler>());
+
+        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private global::System.Threading.Tasks.ValueTask<bool> Instrumented1(global::MediatingKit.RequestPipeline<global::Files.DeleteFileHandler, global::Files.DeleteFile, bool> pipeline, global::Files.DeleteFile request, global::System.Threading.CancellationToken ct) =>
+            Dispatch(pipeline.Invoke, request, "send DeleteFile", "Files.DeleteFile", ct);
 
         private global::MediatingKit.IStreamRequestHandler<global::Files.ListFiles, string>? _stream0;
 
