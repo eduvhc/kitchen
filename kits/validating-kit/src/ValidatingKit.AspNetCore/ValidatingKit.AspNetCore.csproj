@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Runs ValidatingKit validators on ASP.NET Core requests: one call validates every minimal API or controller argument that has a validator, and failures become ValidationProblemDetails.</Description>
+    <PackageTags>validation;validator;aspnetcore;minimal-api;problem-details</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ValidatingKit/ValidatingKit.csproj" />
+    <ProjectReference Include="../../../resulting-kit/src/ResultingKit.AspNetCore/ResultingKit.AspNetCore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ValidatingKit.AspNetCore.UnitTests" />
+  </ItemGroup>
+
+</Project>

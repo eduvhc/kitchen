@@ -4,6 +4,7 @@ Fluent validation that returns a [ResultingKit](../resulting-kit) `Result`. Rule
 
 ```bash
 dotnet add package ValidatingKit
+dotnet add package ValidatingKit.AspNetCore   # optional: validate minimal API and controller arguments automatically
 ```
 
 No dependencies beyond ResultingKit. No reflection, no expression trees, no registration: one `using ValidatingKit;` and you are writing rules.
@@ -136,7 +137,7 @@ Derive from `Validator<T>` to name a set of rules once and use it anywhere:
 ```csharp
 public sealed class LineValidator() : Validator<Line>("line.invalid")
 {
-    public override Validation<Line> Apply(Validation<Line> line) => line
+    public override Validation<Line> Apply(Validation<Line> validation) => validation
         .Field(l => l.Sku, f => f.NotBlank())
         .Field(l => l.Quantity, f => f.GreaterThan(0));
 }
@@ -146,10 +147,10 @@ public sealed class LineValidator() : Validator<Line>("line.invalid")
 - `f.Valid(validator)` and `l => l.Valid(validator)` apply it to a nested member or to each element. The outer validation's code wins.
 - `Validation.That(x, code).Include(validator)` adds its rules to another validation.
 
-A validator keeps no state, so one instance can be shared. ValidatingKit has no registration extension, because that would add a dependency on `Microsoft.Extensions.DependencyInjection.Abstractions` for one line the host can write itself:
+A validator keeps no state, so one instance can be shared. In an ASP.NET Core app, `ValidatingKit.AspNetCore` registers them for you (see [ASP.NET Core](#aspnet-core)). Anywhere else it is one line, which is why the core package has no dependency on dependency injection:
 
 ```csharp
-builder.Services.AddSingleton<IValidator<Line>, LineValidator>();
+services.AddSingleton<IValidator<Line>, LineValidator>();
 ```
 
 ## Results
@@ -181,6 +182,49 @@ With `ResultingKit.AspNetCore`, a validation failure becomes a `ValidationProble
   "traceId": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
 }
 ```
+
+## ASP.NET Core
+
+```bash
+dotnet add package ValidatingKit.AspNetCore
+```
+
+Register your validators, then switch validation on for a group, an endpoint, or every controller. Invalid input never reaches your handler:
+
+```csharp
+using ValidatingKit.AspNetCore;
+
+builder.Services.AddProblemDetails();
+builder.Services.AddValidatorsFromAssemblyContaining<Program>();
+
+var api = app.MapGroup("/api").WithValidation();
+
+api.MapPost("/orders", (PlaceOrder order, OrderService orders) =>
+    orders.Place(order).ToHttpResult(o => TypedResults.Created($"/api/orders/{o.Id}", o)));
+```
+
+That's all. Every argument whose type has a registered `IValidator<T>`, here `PlaceOrder`, is validated before the handler runs. A failure comes back as the validation problem shown above, built by ResultingKit.AspNetCore through ASP.NET Core's own problem details services, so it carries `code` and `traceId` and runs your `CustomizeProblemDetails`.
+
+| You want | Write |
+| --- | --- |
+| Register one validator | `services.AddValidator<PlaceOrderValidator>()` |
+| Register every validator in an assembly | `services.AddValidatorsFromAssemblyContaining<Program>()` |
+| Validate a whole group of endpoints | `app.MapGroup("/api").WithValidation()` |
+| Validate one endpoint | `app.MapPost(...).WithValidation()` |
+| Validate inline, without a class | `app.MapPost(...).Validate<Note>(n => n.Field(x => x.Text, f => f.NotBlank()))` |
+| Return 422 instead of 400 | `.WithValidation(_ => 422)`, or `.Validate<T>(rules, statusCode: _ => 422)` |
+| Validate controller actions | `services.AddControllers().WithValidation()` |
+
+Details that keep it out of your way:
+
+- **Decided once, at startup.** Which arguments of which endpoint get validated is worked out when the endpoint is built. An endpoint with nothing to validate gets no filter at all; a validated one costs a validator lookup and the validation itself.
+- **Validators come from the request's services**, so a validator can take scoped dependencies. Registration helpers add singletons, and they skip any validator interface you have already registered yourself, so your registration wins.
+- **OpenAPI knows.** Every endpoint that validates advertises a `400` `HttpValidationProblemDetails` response, so generated clients and docs show the validation errors without a `.ProducesValidationProblem()` on each endpoint.
+- **Groups and endpoints combine.** `WithValidation()` on a group and again on one of its endpoints validates once, with the endpoint's status. `Validate<T>()` adds inline rules on top of any registered validator.
+- **Mistakes fail at startup.** `Validate<Note>()` on an endpoint without a `Note` parameter throws when the endpoints are built, naming the endpoint, rather than silently validating nothing.
+- **Native AOT and trimming.** `WithValidation()` closes generic types over parameter types at startup and is annotated `[RequiresDynamicCode]`; assembly scanning is `[RequiresUnreferencedCode]`. In an AOT app use `AddValidator<T>()` and `Validate<T>()`, which need neither.
+
+The names avoid .NET 10's own `AddValidation()` (Microsoft.Extensions.Validation, which validates DataAnnotations attributes), so both can live in one app.
 
 ## Performance
 
@@ -238,4 +282,4 @@ dotnet run -c Release --project kits/validating-kit/benchmarks/ValidatingKit.Ben
 
 ## Tests
 
-`ValidatingKit.UnitTests` covers every rule, paths, nesting, collections, conditions, message joining, the `Result` integration, the allocation budget and the examples in this README. The kit has no infrastructure, so there is no integration suite. `benchmarks/ValidatingKit.Benchmarks` holds the comparison above.
+`ValidatingKit.UnitTests` covers every rule, paths, nesting, collections, conditions, message joining, the `Result` integration, the allocation budget and the examples in this README. The core package has no infrastructure, so it has no integration suite. `ValidatingKit.AspNetCore.UnitTests` covers registration and argument discovery, and `ValidatingKit.AspNetCore.IntegrationTests` runs real minimal API and controller endpoints on an in-memory `TestServer`, with no Docker needed. `benchmarks/ValidatingKit.Benchmarks` holds the comparison above.

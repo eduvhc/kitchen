@@ -11,7 +11,7 @@ A family of small, independent .NET packages. Each kit owns one concern, version
 | [MailingKit](kits/mailing-kit) | Email as a module: templates, SMTP or Resend, a record of what was sent | `MailingKit`, `.Smtp`, `.Resend` |
 | [ResultingKit](kits/resulting-kit) | Explicit success and failure; typed errors that say whether retrying helps | `ResultingKit`, `.AspNetCore` |
 | [StoringKit](kits/storing-kit) | Object storage behind one contract: Azure Blob Storage, AWS S3, Cloudflare R2, MinIO | `StoringKit`, `.Azure`, `.S3` |
-| [ValidatingKit](kits/validating-kit) | Fluent, dependency-free validation that returns `Result`s with field-level errors | `ValidatingKit` |
+| [ValidatingKit](kits/validating-kit) | Fluent, dependency-free validation that returns `Result`s with field-level errors; automatic request validation for ASP.NET Core | `ValidatingKit`, `.AspNetCore` |
 
 Each kit's own README documents its packages, and is what ships as the NuGet readme.
 

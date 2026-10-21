@@ -11,6 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="ValidatingKit.AspNetCore" />
     <InternalsVisibleTo Include="ValidatingKit.UnitTests" />
   </ItemGroup>
 

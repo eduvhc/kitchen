@@ -11,7 +11,7 @@ namespace ValidatingKit;
 /// <code>
 /// public sealed class AddressValidator() : Validator&lt;Address&gt;("address.invalid")
 /// {
-///     public override Validation&lt;Address&gt; Apply(Validation&lt;Address&gt; address) => address
+///     public override Validation&lt;Address&gt; Apply(Validation&lt;Address&gt; validation) => validation
 ///         .Field(a => a.Street, f => f.NotBlank())
 ///         .Field(a => a.PostalCode, f => f.NotBlank().MaxLength(10));
 /// }
@@ -49,4 +49,7 @@ public abstract class Validator<T> : IValidator<T>
     /// <inheritdoc />
     /// <remarks>A <see langword="null"/> value is named after <typeparamref name="T"/> in the message, such as <c>address: Is required.</c></remarks>
     public Result<T> Validate(T? value) => Apply(Validation.That(value, Code, s_name)).ToValueResult();
+
+    /// <summary>Like <see cref="Validate"/>, but returns the shared success instead of allocating a <see cref="Result{TValue}"/>.</summary>
+    internal Result Check(T? value) => Apply(Validation.That(value, Code, s_name)).ToResult();
 }
