@@ -170,10 +170,9 @@ builder.Services.AddOpenTelemetry()
 
 | Instrument | Type | Unit | Attributes |
 | --- | --- | --- | --- |
-| `mediatingkit.dispatches` | Counter | `{dispatch}` | `mediatingkit.operation`, `mediatingkit.message.type`, `mediatingkit.outcome`, plus `error.type` on failure |
-| `mediatingkit.dispatch.duration` | Histogram | `s` | Same as above |
+| `mediatingkit.dispatch.duration` | Histogram | `s` | `mediatingkit.operation`, `mediatingkit.message.type`, `mediatingkit.outcome`, plus `error.type` on failure |
 
-The histogram advises buckets from 100 µs to 10 s.
+The histogram's count is the number of dispatches, so there is no separate counter. It advises buckets from 100 µs to 10 s.
 
 ## Later: transports
 

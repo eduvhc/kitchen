@@ -9,7 +9,6 @@ namespace MediatingKit;
 /// </summary>
 internal sealed class MediatorTelemetry
 {
-    public const string DispatchesName = "mediatingkit.dispatches";
     public const string DispatchDurationName = "mediatingkit.dispatch.duration";
 
     // The OpenTelemetry semconv boundaries for durations in seconds, from 5 ms; in-process dispatch is usually faster,
@@ -17,7 +16,8 @@ internal sealed class MediatorTelemetry
     private static readonly double[] DurationBuckets =
         [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10];
 
-    private readonly Counter<long> _dispatches;
+    // One histogram and no separate counter: a histogram already counts, per attribute set, so the dispatch count
+    // is its count. It also keeps the mediator's per-call listener check to two reads.
     private readonly Histogram<double> _duration;
 
     public MediatorTelemetry(IMeterFactory meterFactory)
@@ -29,20 +29,12 @@ internal sealed class MediatorTelemetry
             Version = MediatingKitInstrumentation.Version,
         });
 
-        _dispatches = meter.CreateCounter<long>(
-            DispatchesName,
-            "{dispatch}",
-            "Requests sent and notifications published, by outcome.");
-
         _duration = meter.CreateHistogram(
             DispatchDurationName,
             "s",
             "Duration of one send through its behaviors and handler, or one publish to every handler.",
             advice: new InstrumentAdvice<double> { HistogramBucketBoundaries = DurationBuckets });
     }
-
-    /// <summary>The counter, which the mediator checks for listeners directly on every call.</summary>
-    public Counter<long> Dispatches => _dispatches;
 
     /// <summary>The histogram, which the mediator checks for listeners directly on every call.</summary>
     public Histogram<double> Duration => _duration;
@@ -62,7 +54,7 @@ internal sealed class MediatorTelemetry
 
     private void Record(string operation, string messageType, string outcome, string? errorType, TimeSpan duration)
     {
-        if (!_dispatches.Enabled && !_duration.Enabled)
+        if (!_duration.Enabled)
         {
             return;
         }
@@ -79,7 +71,6 @@ internal sealed class MediatorTelemetry
             tags.Add(MediatingKitTags.ErrorType, errorType);
         }
 
-        _dispatches.Add(1, tags);
         _duration.Record(duration.TotalSeconds, tags);
     }
 

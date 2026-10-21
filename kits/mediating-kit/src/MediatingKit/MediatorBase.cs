@@ -17,9 +17,8 @@ public abstract class MediatorBase : IMediator
     private readonly MediatorRuntime _runtime;
     private readonly bool _sequential;
 
-    // The instruments themselves rather than the telemetry object, so the per-call listener check is three short,
+    // The instrument itself rather than the telemetry object, so the per-call listener check is two short,
     // independent reads instead of one long chain.
-    private readonly Counter<long> _dispatches;
     private readonly Histogram<double> _duration;
 
     /// <summary>Creates the mediator over the container or scope it was resolved from.</summary>
@@ -31,7 +30,6 @@ public abstract class MediatorBase : IMediator
         Services = services;
         _runtime = services.GetRequiredService<MediatorRuntime>();
         _sequential = _runtime.NotificationPublishing == NotificationPublishing.Sequential;
-        _dispatches = _runtime.Telemetry.Dispatches;
         _duration = _runtime.Telemetry.Duration;
     }
 
@@ -39,8 +37,12 @@ public abstract class MediatorBase : IMediator
     protected IServiceProvider Services { get; }
 
     /// <summary>Whether a span or metric listener is attached. Checked per call.</summary>
+    /// <remarks>
+    /// Non-short-circuit <c>|</c> on purpose: each check is a null test the JIT predicts to be non-null, so as
+    /// branches they would make it treat the uninstrumented path as the cold one and stop inlining into it.
+    /// </remarks>
     protected bool IsInstrumented =>
-        _dispatches.Enabled || _duration.Enabled || MediatingKitInstrumentation.ActivitySource.HasListeners();
+        _duration.Enabled | MediatingKitInstrumentation.ActivitySource.HasListeners();
 
     /// <summary>
     /// Whether a publish can call its handlers one after another from generated code: sequential publishing, and

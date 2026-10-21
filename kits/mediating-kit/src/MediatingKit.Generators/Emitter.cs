@@ -288,7 +288,8 @@ internal static class Emitter
 
     /// <summary>
     /// Three methods per request type. <c>Send{i}</c> is the hot path: with the handler resolved, no behavior and nobody
-    /// listening, it calls the handler directly. <c>Slow{i}</c> resolves the handler on first use and runs behaviors and
+    /// listening, it calls the handler directly. Its guard is one non-null test and one bool, both of which the JIT
+    /// predicts the fast way; a null test that has to succeed would make it treat the fast path as cold. <c>Slow{i}</c> resolves the handler on first use and runs behaviors and
     /// telemetry. <c>Initialize{i}</c> builds a pipeline only if a behavior applies, so a scope that never has one
     /// allocates nothing for it beyond the handler.
     /// </summary>
@@ -322,14 +323,15 @@ internal static class Emitter
 
             w.Line();
             w.Line($"private {holder}? _handler{i};");
+            w.Line($"private {holder}? _direct{i};");
             w.Line($"private {pipelineType}? _pipeline{i};");
             w.Line();
             w.Line(NoInline);
             w.Line($"private {returns} Send{i}({handler.MessageType} request, global::System.Threading.CancellationToken ct)");
             w.Open();
-            w.Line($"var handler = {Volatile}.Read(ref _handler{i});");
-            w.Line($"if (handler is null || _pipeline{i} is not null || IsInstrumented) return Slow{i}(request, ct);");
-            w.Line($"return {call};");
+            w.Line($"var handler = {Volatile}.Read(ref _direct{i});");
+            w.Line($"if (handler is not null & !IsInstrumented) return (({handler.InterfaceType})handler!).Handle(request, ct);");
+            w.Line($"return Slow{i}(request, ct);");
             w.Close();
             w.Line();
             w.Line(NoInline);
@@ -347,8 +349,9 @@ internal static class Emitter
             w.Line($"private {holder} Initialize{i}()");
             w.Open();
             w.Line($"var handler = {Resolve(handler)};");
-            w.Line($"_pipeline{i} = {createIfAny};");
+            w.Line($"var pipeline = _pipeline{i} = {createIfAny};");
             w.Line($"{Volatile}.Write(ref _handler{i}, handler);");
+            w.Line($"if (pipeline is null) {Volatile}.Write(ref _direct{i}, handler);");
             w.Line("return handler;");
             w.Close();
         }

@@ -16,7 +16,6 @@ public sealed class TelemetryTests
     {
         await using var host = TestHost.Create();
         using var spans = new SpanRecorder();
-        using var dispatches = Collector<long>(host, MediatorTelemetry.DispatchesName);
         using var durations = Collector<double>(host, MediatorTelemetry.DispatchDurationName);
 
         await host.Mediator.Send(new DeleteFile("secret-id"), Ct);
@@ -29,12 +28,11 @@ public sealed class TelemetryTests
         Assert.AreEqual("success", span.GetTagItem("mediatingkit.outcome"));
         Assert.IsFalse(span.TagObjects.Any(t => t.Value?.ToString()?.Contains("secret-id", StringComparison.Ordinal) == true), "request data is never recorded");
 
-        var measurement = dispatches.GetMeasurementSnapshot().Single();
-        Assert.AreEqual(1, measurement.Value);
+        var measurement = durations.GetMeasurementSnapshot().Single();
+        Assert.IsGreaterThanOrEqualTo(0d, measurement.Value);
         Assert.AreEqual("send", measurement.Tags["mediatingkit.operation"]);
         Assert.AreEqual("MediatingKit.UnitTests.DeleteFile", measurement.Tags["mediatingkit.message.type"]);
         Assert.AreEqual("success", measurement.Tags["mediatingkit.outcome"]);
-        Assert.ContainsSingle(durations.GetMeasurementSnapshot());
     }
 
     [TestMethod]
@@ -54,7 +52,7 @@ public sealed class TelemetryTests
     {
         await using var host = TestHost.Create();
         using var spans = new SpanRecorder();
-        using var dispatches = Collector<long>(host, MediatorTelemetry.DispatchesName);
+        using var durations = Collector<double>(host, MediatorTelemetry.DispatchDurationName);
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await host.Mediator.Send(new Explode(true), Ct));
 
@@ -63,7 +61,7 @@ public sealed class TelemetryTests
         Assert.IsNull(span.StatusDescription, "messages can carry request data");
         Assert.AreEqual("failure", span.GetTagItem("mediatingkit.outcome"));
         Assert.AreEqual("System.InvalidOperationException", span.GetTagItem("error.type"));
-        Assert.AreEqual("System.InvalidOperationException", dispatches.GetMeasurementSnapshot().Single().Tags["error.type"]);
+        Assert.AreEqual("System.InvalidOperationException", durations.GetMeasurementSnapshot().Single().Tags["error.type"]);
     }
 
     [TestMethod]
