@@ -49,15 +49,20 @@ public static class LockingServiceCollectionExtensions
 }
 
 /// <summary>Picks the backend of one lock provider. Provider packages add <c>Use…</c> extensions to it.</summary>
-/// <param name="services">The service collection.</param>
-/// <param name="name">The provider name, and the service key it is registered under.</param>
-public sealed class LockingBuilder(IServiceCollection services, string name)
+public sealed class LockingBuilder
 {
+    // Internal: a builder only comes from AddLocking, so a primary (public) constructor would widen the API.
+    internal LockingBuilder(IServiceCollection services, string name)
+    {
+        Services = services;
+        Name = name;
+    }
+
     /// <summary>The service collection.</summary>
-    public IServiceCollection Services { get; } = services ?? throw new ArgumentNullException(nameof(services));
+    public IServiceCollection Services { get; }
 
     /// <summary>The provider name, and the service key it is registered under.</summary>
-    public string Name { get; } = string.IsNullOrWhiteSpace(name) ? throw new ArgumentException("A name is required.", nameof(name)) : name;
+    public string Name { get; }
 
     /// <summary>
     /// Registers <see cref="Name"/> over a backend. Provider packages call this from their <c>Use…</c> methods; call it
