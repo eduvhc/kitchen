@@ -388,6 +388,111 @@ public sealed class GeneratorTests
         Assert.IsEmpty(run.Sources);
     }
 
+    /// <summary>
+    /// The whole generated mediator for a project with every kind of message, compared with the checked-in snapshot.
+    /// After an intended change, run the tests with MEDIATINGKIT_UPDATE_SNAPSHOTS=1 and review the diff.
+    /// </summary>
+    [TestMethod]
+    public void The_generated_mediator_matches_its_snapshot()
+    {
+        var run = Generate("""
+            using System.Collections.Generic;
+            using System.Threading;
+            using System.Threading.Tasks;
+            using MediatingKit;
+
+            namespace Files;
+
+            public sealed record DeleteFile(string Id) : IRequest<bool>;
+            public sealed record Touch(string Id) : IRequest;
+            public sealed record ListFiles(string Prefix) : IStreamRequest<string>;
+            public sealed record FileDeleted(string Id) : INotification;
+
+            public sealed class DeleteFileHandler : IRequestHandler<DeleteFile, bool>
+            {
+                public ValueTask<bool> Handle(DeleteFile request, CancellationToken ct) => new(true);
+            }
+
+            internal sealed class TouchHandler : IRequestHandler<Touch>
+            {
+                public ValueTask Handle(Touch request, CancellationToken ct) => default;
+            }
+
+            public sealed class ListFilesHandler : IStreamRequestHandler<ListFiles, string>
+            {
+                public async IAsyncEnumerable<string> Handle(ListFiles request, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+                {
+                    await Task.Yield();
+                    yield return request.Prefix;
+                }
+            }
+
+            public sealed class Audit : INotificationHandler<FileDeleted>
+            {
+                public ValueTask Handle(FileDeleted notification, CancellationToken ct) => default;
+            }
+
+            public sealed class Everything : INotificationHandler<INotification>
+            {
+                public ValueTask Handle(INotification notification, CancellationToken ct) => default;
+            }
+            """, Composition);
+
+        Assert.IsEmpty(run.Diagnostics);
+        Assert.IsEmpty(run.Output.GetDiagnostics(TestContext.CancellationToken).Where(d => d.Severity >= DiagnosticSeverity.Warning));
+
+        foreach (var (hintName, source) in run.Sources)
+        {
+            MatchSnapshot(hintName, source);
+        }
+    }
+
+    [TestMethod]
+    public void An_edit_that_changes_no_message_or_handler_reuses_the_generated_output()
+    {
+        var parseOptions = CSharpParseOptions.Default
+            .WithLanguageVersion(LanguageVersion.Latest)
+            .WithFeatures([new KeyValuePair<string, string>("InterceptorsNamespaces", "MediatingKit.Generated")]);
+        var compilation = CSharpCompilation.Create(
+            "Probe",
+            [CSharpSyntaxTree.ParseText(DeleteFile, parseOptions, path: "Source0.cs"), CSharpSyntaxTree.ParseText(Composition, parseOptions, path: "Source1.cs")],
+            PlatformReferences(withMediatingKit: true),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable));
+
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            [new MediatorGenerator().AsSourceGenerator()],
+            parseOptions: parseOptions,
+            driverOptions: new GeneratorDriverOptions(IncrementalGeneratorOutputKind.None, trackIncrementalGeneratorSteps: true));
+
+        driver = driver.RunGenerators(compilation, TestContext.CancellationToken);
+
+        var edited = compilation.AddSyntaxTrees(CSharpSyntaxTree.ParseText(
+            "public static class Unrelated { public static int Answer() => 42; }", parseOptions, path: "Source2.cs"));
+        driver = driver.RunGenerators(edited, TestContext.CancellationToken);
+
+        var outputs = driver.GetRunResult().Results.Single().TrackedOutputSteps.SelectMany(s => s.Value).SelectMany(s => s.Outputs).ToList();
+
+        Assert.IsNotEmpty(outputs);
+        Assert.IsTrue(
+            outputs.All(o => o.Reason is IncrementalStepRunReason.Cached or IncrementalStepRunReason.Unchanged),
+            string.Join(", ", outputs.Select(o => o.Reason)));
+    }
+
+    private static void MatchSnapshot(string hintName, string actual, [System.Runtime.CompilerServices.CallerFilePath] string testFile = "")
+    {
+        var path = Path.Combine(Path.GetDirectoryName(testFile)!, "Snapshots", hintName.Replace(".g.cs", ".verified.txt", StringComparison.Ordinal));
+
+        if (Environment.GetEnvironmentVariable("MEDIATINGKIT_UPDATE_SNAPSHOTS") == "1")
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, actual);
+            return;
+        }
+
+        Assert.IsTrue(File.Exists(path), $"No snapshot at {path}; run with MEDIATINGKIT_UPDATE_SNAPSHOTS=1 to write it.");
+        Assert.AreEqual(File.ReadAllText(path).ReplaceLineEndings("\n"), actual, $"{hintName} differs from {path}.");
+    }
+
     /// <summary>The source a diagnostic points at. Generator diagnostics carry a path and span rather than a tree.</summary>
     private static string SourceAt(GeneratorRun run, Diagnostic diagnostic) =>
         run.Output.SyntaxTrees

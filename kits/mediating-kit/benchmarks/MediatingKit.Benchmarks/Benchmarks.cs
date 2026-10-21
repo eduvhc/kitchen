@@ -42,16 +42,17 @@ public abstract class MediatorBenchmarks
 
     private void Build()
     {
+        // Mediator's generator reads any AddMediator call with a lambda as its own configuration, so the options are
+        // passed as a variable; the call is otherwise the one-liner an application writes.
+        Action<MediatorOptions> configure = WithBehavior ? o => o.AddBehavior(typeof(Kit.PassThrough<,>)) : _ => { };
         var kit = new ServiceCollection();
-        if (WithBehavior)
-        {
-            // The same as AddMediator(o => o.AddBehavior(...)): Mediator's generator claims any AddMediator call with a
-            // lambda as its own configuration, so the behavior is registered directly here.
-            kit.AddScoped(typeof(MediatingKit.IPipelineBehavior<,>), typeof(Kit.PassThrough<,>));
-        }
-
-        MediatingKit.MediatingServiceCollectionExtensions.AddMediator(kit);
+        MediatingKit.MediatingServiceCollectionExtensions.AddMediator(kit, configure);
         KitMediator = Resolve<MediatingKit.IMediator>(kit);
+
+        if (WithBehavior != kit.Any(d => d.ServiceType == typeof(MediatingKit.IPipelineBehavior<,>)))
+        {
+            throw new InvalidOperationException("MediatingKit's behavior registration does not match the benchmark's parameter.");
+        }
 
         var mediatR = new ServiceCollection().AddLogging();
         mediatR.AddMediatR(o =>

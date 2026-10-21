@@ -11,8 +11,10 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
-    <!-- Benchmark methods are instance methods by contract and benchmark types are public by contract. -->
-    <NoWarn>$(NoWarn);CA1822;CA1515;CA1707;CA2007</NoWarn>
+    <!-- BenchmarkDotNet generates and builds its own project per run; it needs optimised, non-test code. -->
+    <Optimize>true</Optimize>
+    <!-- BenchmarkDotNet runs public instance methods on public types only. -->
+    <NoWarn>$(NoWarn);CA1822;CA1515</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
