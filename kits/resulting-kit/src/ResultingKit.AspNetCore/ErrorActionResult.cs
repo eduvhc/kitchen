@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace ResultingKit.AspNetCore;
@@ -17,6 +18,11 @@ namespace ResultingKit.AspNetCore;
 /// <c>ProblemDetailsOptions.CustomizeProblemDetails</c>. <c>detail</c> is <see cref="Error.Message"/>, and a
 /// <c>code</c> extension (<see cref="ErrorHttpExtensions.CodeExtension"/>) carrying <see cref="Error.Code"/> is
 /// added after the factory returns, as <c>ControllerBase.Problem</c> adds its <c>extensions</c>.
+/// </para>
+/// <para>
+/// An error with <see cref="Error.FieldErrors"/> becomes a <see cref="ValidationProblemDetails"/> instead, built by
+/// <see cref="ProblemDetailsFactory.CreateValidationProblemDetails"/> as <c>ControllerBase.ValidationProblem</c>
+/// does, with the fields under <c>errors</c> and the same <c>detail</c>, <c>code</c> and <c>traceId</c>.
 /// </para>
 /// <para>
 /// It is written through an <see cref="ObjectResult"/>, so content negotiation picks the formatter and
@@ -55,9 +61,26 @@ public sealed class ErrorActionResult : ActionResult, IStatusCodeActionResult
         ArgumentNullException.ThrowIfNull(context);
 
         var factory = context.HttpContext.RequestServices.GetRequiredService<ProblemDetailsFactory>();
-        var problem = factory.CreateProblemDetails(context.HttpContext, StatusCode, detail: Error.Message);
+        var problem = Error.FieldErrors is { } fields
+            ? factory.CreateValidationProblemDetails(context.HttpContext, ToModelState(fields), StatusCode, detail: Error.Message)
+            : factory.CreateProblemDetails(context.HttpContext, StatusCode, detail: Error.Message);
         problem.Extensions[ErrorHttpExtensions.CodeExtension] = Error.Code;
 
         return new ObjectResult(problem) { StatusCode = problem.Status }.ExecuteResultAsync(context);
+    }
+
+    private static ModelStateDictionary ToModelState(IReadOnlyDictionary<string, string[]> fields)
+    {
+        var modelState = new ModelStateDictionary(int.MaxValue);
+
+        foreach (var (field, messages) in fields)
+        {
+            foreach (var message in messages)
+            {
+                modelState.AddModelError(field, message);
+            }
+        }
+
+        return modelState;
     }
 }

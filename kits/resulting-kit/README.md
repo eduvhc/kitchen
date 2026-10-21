@@ -14,7 +14,7 @@ No dependencies. MessagingKit and MailingKit use it for their transport contract
 | --- | --- |
 | `Result` | Success, or failure with an `Error`. |
 | `Result<T>` | Success with a `T`, or failure with an `Error`. Derives from `Result`. |
-| `Error` | `Code`, `Message`, `Kind`. A record, so `with` works. |
+| `Error` | `Code`, `Message`, `Kind`, and optional `FieldErrors`. A record, so `with` works. |
 | `ErrorKind` | `Failure`, `Validation`, `NotFound`, `Conflict`, `Unauthorized`, `Forbidden`, `Transient`. |
 
 `Code` is stable and machine-readable (`smtp.mailbox_unavailable`), meant for logs, metrics, and `switch`. `Message` is for people and may change.
@@ -71,6 +71,27 @@ var label = await orders.GetAsync(id, ct)
         error => error.Kind == ErrorKind.NotFound ? "No such order" : "Unavailable");
 ```
 
+## Field errors
+
+An error about specific inputs can say which ones. `FieldErrors` maps each field's path to its messages; it is `null` for every other error:
+
+```csharp
+return Error.Validation(
+    "order.invalid",
+    "name: Must not be blank. lines[0].quantity: Must be greater than 0.",
+    new Dictionary<string, string[]>
+    {
+        ["name"] = ["Must not be blank."],
+        ["lines[0].quantity"] = ["Must be greater than 0."],
+    });
+```
+
+Keep `Message` complete on its own. Plenty of consumers carry only a code and a message, such as an event or a log line, and they should still learn everything that was wrong. [ValidatingKit](../validating-kit) builds these errors for you, with both parts filled in.
+
+Any kind can carry field errors: `Error.Conflict("user.email_taken", "email: Is taken.") with { FieldErrors = ... }` reports a uniqueness clash against the field. An empty map is stored as `null`. The map is kept as given, not copied, so treat it as immutable.
+
+Two errors are equal when `Code`, `Message` and `Kind` match and their field errors hold the same fields with the same messages in the same order; the order of the fields themselves does not matter. `ToString()` stays `"{Code}: {Message}"`.
+
 ## Retrying
 
 `Error.IsTransient` is true only for `ErrorKind.Transient`. Every other kind is permanent — retrying a validation failure or a 5xx refusal cannot help. That is the whole contract MessagingKit's outbox and MailingKit's inbox handler rely on: a transient error goes back on the retry ladder, anything else is dead-lettered straight away.
@@ -107,6 +128,26 @@ A success becomes `204 No Content` for a `Result` and `200 OK` with the value fo
 | `Conflict` | 409 |
 | `Transient` | 503 |
 | `Failure` | 500 |
+
+### Validation problems
+
+An error with `FieldErrors` becomes a `ValidationProblemDetails` instead, with the fields under `errors` and the same `detail`, `code` and `traceId`:
+
+```json
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+  "title": "One or more validation errors occurred.",
+  "status": 400,
+  "detail": "name: Must not be blank.",
+  "errors": {
+    "name": ["Must not be blank."]
+  },
+  "code": "order.invalid",
+  "traceId": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+}
+```
+
+Minimal APIs get what `TypedResults.ValidationProblem` builds; controllers get what `ProblemDetailsFactory.CreateValidationProblemDetails` builds, as `ControllerBase.ValidationProblem()` does. The status still comes from `Error.Kind` or your `statusCode` function, so a 422 or a 409 with field errors works too; `title` stays the validation title.
 
 ### Minimal APIs
 
