@@ -27,6 +27,12 @@ public abstract class MediatorBenchmarks
 
     protected global::Mediator.IMediator SourceGeneratedMediator { get; private set; } = null!;
 
+    protected IServiceProvider KitServices { get; private set; } = null!;
+
+    protected IServiceProvider MediatRServices { get; private set; } = null!;
+
+    protected IServiceProvider SourceGeneratedServices { get; private set; } = null!;
+
     protected abstract bool WithBehavior { get; }
 
     [GlobalSetup]
@@ -47,7 +53,8 @@ public abstract class MediatorBenchmarks
         Action<MediatorOptions> configure = WithBehavior ? o => o.AddBehavior(typeof(Kit.PassThrough<,>)) : _ => { };
         var kit = new ServiceCollection();
         MediatingKit.MediatingServiceCollectionExtensions.AddMediator(kit, configure);
-        KitMediator = Resolve<MediatingKit.IMediator>(kit);
+        KitMediator = Resolve<MediatingKit.IMediator>(kit, out var kitServices);
+        KitServices = kitServices;
 
         if (WithBehavior != kit.Any(d => d.ServiceType == typeof(MediatingKit.IPipelineBehavior<,>)))
         {
@@ -64,7 +71,8 @@ public abstract class MediatorBenchmarks
                 o.AddOpenBehavior(typeof(MediatR.PassThrough<,>));
             }
         });
-        MediatRMediator = Resolve<global::MediatR.IMediator>(mediatR);
+        MediatRMediator = Resolve<global::MediatR.IMediator>(mediatR, out var mediatRServices);
+        MediatRServices = mediatRServices;
 
         var mediator = new ServiceCollection();
         global::SourceGeneratedMediator.SourceGeneratedMediatorSetup.Add(mediator);
@@ -74,7 +82,8 @@ public abstract class MediatorBenchmarks
             mediator.AddSingleton(typeof(global::Mediator.IPipelineBehavior<,>), typeof(Mediator.PassThrough<,>));
         }
 
-        SourceGeneratedMediator = Resolve<global::Mediator.IMediator>(mediator);
+        SourceGeneratedMediator = Resolve<global::Mediator.IMediator>(mediator, out var sourceGeneratedServices);
+        SourceGeneratedServices = sourceGeneratedServices;
     }
 
     [GlobalCleanup]
@@ -88,10 +97,11 @@ public abstract class MediatorBenchmarks
 
     protected void Track(IDisposable disposable) => _disposables.Add(disposable);
 
-    private T Resolve<T>(IServiceCollection services)
+    private T Resolve<T>(IServiceCollection services, out IServiceProvider root)
         where T : notnull
     {
         var provider = services.BuildServiceProvider();
+        root = provider;
         var scope = provider.CreateScope();
         _disposables.Add(provider);
         _disposables.Add(scope);
@@ -202,4 +212,40 @@ public class TelemetryBenchmarks : MediatorBenchmarks
 
     [Benchmark(Description = "MediatingKit send")]
     public ValueTask<Kit.Pong> MediatingKitSend() => KitMediator.Send(KitRequest, CancellationToken.None);
+}
+
+/// <summary>
+/// One send from a fresh scope, as an ASP.NET Core request makes it: create the scope, resolve the mediator, send,
+/// dispose. This is where MediatingKit's scoped default pays for resolving the handler and building the pipeline once
+/// per scope; Mediator's handlers are singletons here and MediatR resolves per send regardless.
+/// </summary>
+[MemoryDiagnoser]
+public class ScopedSendBenchmarks : MediatorBenchmarks
+{
+    private static readonly KitPing KitRequest = new(1);
+    private static readonly MediatRPing MediatRRequest = new(1);
+    private static readonly MediatorPing MediatorRequest = new(1);
+
+    protected override bool WithBehavior => false;
+
+    [Benchmark(Baseline = true, Description = "MediatingKit")]
+    public async ValueTask<Kit.Pong> MediatingKitSend()
+    {
+        await using var scope = KitServices.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<MediatingKit.IMediator>().Send(KitRequest, CancellationToken.None);
+    }
+
+    [Benchmark(Description = "Mediator 3.0.2")]
+    public async ValueTask<Mediator.Pong> MediatorSend()
+    {
+        await using var scope = SourceGeneratedServices.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<global::Mediator.IMediator>().Send(MediatorRequest, CancellationToken.None);
+    }
+
+    [Benchmark(Description = "MediatR 14.2.0")]
+    public async Task<MediatR.Pong> MediatRSend()
+    {
+        await using var scope = MediatRServices.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<global::MediatR.IMediator>().Send(MediatRRequest, CancellationToken.None);
+    }
 }
