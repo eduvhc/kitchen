@@ -216,8 +216,8 @@ public class TelemetryBenchmarks : MediatorBenchmarks
 
 /// <summary>
 /// One send from a fresh scope, as an ASP.NET Core request makes it: create the scope, resolve the mediator, send,
-/// dispose. This is where MediatingKit's scoped default pays for resolving the handler and building the pipeline once
-/// per scope; Mediator's handlers are singletons here and MediatR resolves per send regardless.
+/// dispose. This is where MediatingKit's scoped default pays for a mediator and a handler per scope, and the container
+/// for tracking them; with singleton lifetime it does what Mediator does here. MediatR resolves per send regardless.
 /// </summary>
 [MemoryDiagnoser]
 public class ScopedSendBenchmarks : MediatorBenchmarks
@@ -226,12 +226,31 @@ public class ScopedSendBenchmarks : MediatorBenchmarks
     private static readonly MediatRPing MediatRRequest = new(1);
     private static readonly MediatorPing MediatorRequest = new(1);
 
+    private IServiceProvider _singletonKit = null!;
+
     protected override bool WithBehavior => false;
+
+    protected override void AfterSetup()
+    {
+        Action<MediatorOptions> configure = o => o.Lifetime = ServiceLifetime.Singleton;
+        var services = new ServiceCollection();
+        MediatingKit.MediatingServiceCollectionExtensions.AddMediator(services, configure);
+        var provider = services.BuildServiceProvider();
+        Track(provider);
+        _singletonKit = provider;
+    }
 
     [Benchmark(Baseline = true, Description = "MediatingKit")]
     public async ValueTask<Kit.Pong> MediatingKitSend()
     {
         await using var scope = KitServices.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<MediatingKit.IMediator>().Send(KitRequest, CancellationToken.None);
+    }
+
+    [Benchmark(Description = "MediatingKit, singleton")]
+    public async ValueTask<Kit.Pong> MediatingKitSingletonSend()
+    {
+        await using var scope = _singletonKit.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<MediatingKit.IMediator>().Send(KitRequest, CancellationToken.None);
     }
 
