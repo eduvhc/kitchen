@@ -1,8 +1,13 @@
 <Solution>
+  <Folder Name="/benchmarks/">
+    <Project Path="kits/mediating-kit/benchmarks/MediatingKit.Benchmarks/MediatingKit.Benchmarks.csproj" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="kits/mailing-kit/src/MailingKit.Resend/MailingKit.Resend.csproj" />
     <Project Path="kits/mailing-kit/src/MailingKit.Smtp/MailingKit.Smtp.csproj" />
     <Project Path="kits/mailing-kit/src/MailingKit/MailingKit.csproj" />
+    <Project Path="kits/mediating-kit/src/MediatingKit.Generators/MediatingKit.Generators.csproj" />
+    <Project Path="kits/mediating-kit/src/MediatingKit/MediatingKit.csproj" />
     <Project Path="kits/messaging-kit/src/MessagingKit.Abstractions/MessagingKit.Abstractions.csproj" />
     <Project Path="kits/messaging-kit/src/MessagingKit.Analyzers/MessagingKit.Analyzers.csproj" />
     <Project Path="kits/messaging-kit/src/MessagingKit.InProcess/MessagingKit.InProcess.csproj" />
@@ -31,6 +36,7 @@
     <Project Path="kits/mailing-kit/tests/MailingKit.Resend.UnitTests/MailingKit.Resend.UnitTests.csproj" />
     <Project Path="kits/mailing-kit/tests/MailingKit.Smtp.UnitTests/MailingKit.Smtp.UnitTests.csproj" />
     <Project Path="kits/mailing-kit/tests/MailingKit.UnitTests/MailingKit.UnitTests.csproj" />
+    <Project Path="kits/mediating-kit/tests/MediatingKit.UnitTests/MediatingKit.UnitTests.csproj" />
     <Project Path="kits/messaging-kit/tests/MessagingKit.IntegrationTests/MessagingKit.IntegrationTests.csproj" />
     <Project Path="kits/messaging-kit/tests/MessagingKit.TestSupport/MessagingKit.TestSupport.csproj" />
     <Project Path="kits/messaging-kit/tests/MessagingKit.UnitTests/MessagingKit.UnitTests.csproj" />

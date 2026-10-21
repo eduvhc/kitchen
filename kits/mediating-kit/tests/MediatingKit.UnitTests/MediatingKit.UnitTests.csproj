@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The props the package ships: they enable the interceptor that replaces AddMediator(). -->
+  <Import Project="../../src/MediatingKit/build/MediatingKit.props" />
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- Fully optimised code from the first call, so AllocationTests measures what production runs. -->
+    <TieredCompilation>false</TieredCompilation>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
+    <PackageReference Include="MSTest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/MediatingKit/MediatingKit.csproj" />
+    <ProjectReference Include="../../../resulting-kit/src/ResultingKit/ResultingKit.csproj" />
+
+    <!--
+      Generators do not flow through ProjectReference, so consume it directly: it generates this project's mediator,
+      and the generator tests drive it in memory.
+    -->
+    <ProjectReference Include="../../src/MediatingKit.Generators/MediatingKit.Generators.csproj"
+                      OutputItemType="Analyzer" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+    <Using Include="ResultingKit" />
+    <Using Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+</Project>

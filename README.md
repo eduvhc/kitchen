@@ -11,12 +11,13 @@ A family of small, independent .NET packages. Each kit owns one concern, version
 | [MailingKit](kits/mailing-kit) | Email as a module: templates, SMTP or Resend, a record of what was sent | `MailingKit`, `.Smtp`, `.Resend` |
 | [ResultingKit](kits/resulting-kit) | Explicit success and failure; typed errors that say whether retrying helps | `ResultingKit`, `.AspNetCore` |
 | [StoringKit](kits/storing-kit) | Object storage behind one contract: Azure Blob Storage, AWS S3, Cloudflare R2, MinIO | `StoringKit`, `.Azure`, `.S3` |
+| [MediatingKit](kits/mediating-kit) | In-process requests, notifications and pipeline behaviors, dispatched by code generated at compile time | `MediatingKit` |
 
 Each kit's own README documents its packages, and is what ships as the NuGet readme.
 
 ## The naming rule
 
-Every kit is `<Gerund>Kit` — the *-ing* form of what it does. Testing, Messaging, Mailing, Resulting, Storing, and later Authenticating, Billing, Scheduling, Caching.
+Every kit is `<Gerund>Kit` — the *-ing* form of what it does. Testing, Messaging, Mailing, Resulting, Storing, Mediating, and later Authenticating, Billing, Scheduling, Caching.
 
 Sub-packages extend the root with a dot: `TestingKit.Postgres`, `MessagingKit.Outbox`, `MailingKit.Smtp`. **One package per external dependency**, so a host on Resend never restores MailKit, and a module that only needs contracts never restores EF Core.
 
@@ -48,6 +49,8 @@ kitchen/
     mailing-kit/
     resulting-kit/
     storing-kit/
+    mediating-kit/
+      src/  tests/  benchmarks/    benchmarks/ is BenchmarkDotNet, never packed or run by dotnet test
 ```
 
 Shared configuration lives once at the root. A kit's own `src/Directory.Build.props` adds only what is specific to it: its README and its version tag prefix.

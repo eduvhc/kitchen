@@ -1,0 +1,11 @@
+<Project>
+
+  <!--
+    The source generator replaces each AddMediator() call with the registration it wrote for the calling project. That
+    replacement is a C# interceptor, and the compiler only accepts interceptors from namespaces a project lists here.
+  -->
+  <PropertyGroup>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);MediatingKit.Generated</InterceptorsNamespaces>
+  </PropertyGroup>
+
+</Project>
