@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Small, dependency-free fluent validation that returns ResultingKit results: built-in rules, nested objects, collections, field paths, and validation errors that map to ValidationProblemDetails.</Description>
+    <PackageTags>validation;validator;fluent;result;error</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../resulting-kit/src/ResultingKit/ResultingKit.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ValidatingKit.AspNetCore" />
+    <InternalsVisibleTo Include="ValidatingKit.UnitTests" />
+  </ItemGroup>
+
+</Project>

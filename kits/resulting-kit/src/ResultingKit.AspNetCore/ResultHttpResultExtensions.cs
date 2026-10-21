@@ -11,6 +11,12 @@ namespace ResultingKit.AspNetCore;
 /// <c>AddProblemDetails()</c>, it is written through <c>IProblemDetailsService</c>, which adds a <c>traceId</c>
 /// and runs <c>ProblemDetailsOptions.CustomizeProblemDetails</c>.
 /// </summary>
+/// <remarks>
+/// An error with <see cref="Error.FieldErrors"/> becomes a validation problem instead, with the fields under
+/// <c>errors</c>: what <see cref="TypedResults.ValidationProblem(IEnumerable{KeyValuePair{string, string[]}}, string, string, string, string, IEnumerable{KeyValuePair{string, object}})"/> builds for a 400, or an
+/// <see cref="HttpValidationProblemDetails"/> through <see cref="TypedResults.Problem(Microsoft.AspNetCore.Mvc.ProblemDetails)"/>
+/// when the status function picks another status.
+/// </remarks>
 public static class ResultHttpResultExtensions
 {
     /// <summary>Returns 204 No Content on success, or a problem response on failure.</summary>
@@ -151,9 +157,23 @@ public static class ResultHttpResultExtensions
         return (await result.ConfigureAwait(false)).ToHttpResult(onSuccess, statusCode);
     }
 
-    private static ProblemHttpResult Problem(Error error, Func<Error, int>? statusCode) =>
-        TypedResults.Problem(
-            detail: error.Message,
-            statusCode: error.ToStatusCode(statusCode),
-            extensions: [new(ErrorHttpExtensions.CodeExtension, error.Code)]);
+    private static IResult Problem(Error error, Func<Error, int>? statusCode)
+    {
+        var status = error.ToStatusCode(statusCode);
+        KeyValuePair<string, object?>[] extensions = [new(ErrorHttpExtensions.CodeExtension, error.Code)];
+
+        if (error.FieldErrors is not { } fields)
+        {
+            return TypedResults.Problem(detail: error.Message, statusCode: status, extensions: extensions);
+        }
+
+        if (status == StatusCodes.Status400BadRequest)
+        {
+            return TypedResults.ValidationProblem(fields, detail: error.Message, extensions: extensions);
+        }
+
+        var problem = new HttpValidationProblemDetails(fields) { Status = status, Detail = error.Message };
+        problem.Extensions[ErrorHttpExtensions.CodeExtension] = error.Code;
+        return TypedResults.Problem(problem);
+    }
 }

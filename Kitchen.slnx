@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/benchmarks/">
+    <Project Path="kits/validating-kit/benchmarks/ValidatingKit.Benchmarks/ValidatingKit.Benchmarks.csproj" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="kits/mailing-kit/src/MailingKit.Resend/MailingKit.Resend.csproj" />
     <Project Path="kits/mailing-kit/src/MailingKit.Smtp/MailingKit.Smtp.csproj" />
@@ -25,6 +28,8 @@
     <Project Path="kits/testing-kit/src/TestingKit.Smtp/TestingKit.Smtp.csproj" />
     <Project Path="kits/testing-kit/src/TestingKit.SqlServer/TestingKit.SqlServer.csproj" />
     <Project Path="kits/testing-kit/src/TestingKit/TestingKit.csproj" />
+    <Project Path="kits/validating-kit/src/ValidatingKit.AspNetCore/ValidatingKit.AspNetCore.csproj" />
+    <Project Path="kits/validating-kit/src/ValidatingKit/ValidatingKit.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="kits/mailing-kit/tests/MailingKit.IntegrationTests/MailingKit.IntegrationTests.csproj" />
@@ -42,5 +47,8 @@
     <Project Path="kits/storing-kit/tests/StoringKit.S3.UnitTests/StoringKit.S3.UnitTests.csproj" />
     <Project Path="kits/storing-kit/tests/StoringKit.UnitTests/StoringKit.UnitTests.csproj" />
     <Project Path="kits/testing-kit/tests/TestingKit.IntegrationTests/TestingKit.IntegrationTests.csproj" />
+    <Project Path="kits/validating-kit/tests/ValidatingKit.AspNetCore.IntegrationTests/ValidatingKit.AspNetCore.IntegrationTests.csproj" />
+    <Project Path="kits/validating-kit/tests/ValidatingKit.AspNetCore.UnitTests/ValidatingKit.AspNetCore.UnitTests.csproj" />
+    <Project Path="kits/validating-kit/tests/ValidatingKit.UnitTests/ValidatingKit.UnitTests.csproj" />
   </Folder>
 </Solution>
