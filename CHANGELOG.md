@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.0](https://github.com/eduvhc/kitchen/compare/v0.3.0...v0.4.0) (2026-10-21)
+
+
+### Features
+
+* add ValidatingKit (+ .AspNetCore) and field-level errors on ResultingKit's Error ([#45](https://github.com/eduvhc/kitchen/issues/45)) ([fdf1ea5](https://github.com/eduvhc/kitchen/commit/fdf1ea5a789c0c51eb90de247998c5c9674005ea))
+* LockingKit for distributed locks on Azure blob leases and PostgreSQL ([#50](https://github.com/eduvhc/kitchen/issues/50)) ([659fa2c](https://github.com/eduvhc/kitchen/commit/659fa2c89d5e281ec22081a3984902554d7a5b6a))
+* MediatingKit, a source-generated mediator ([#51](https://github.com/eduvhc/kitchen/issues/51)) ([3ddc5ef](https://github.com/eduvhc/kitchen/commit/3ddc5ef2f0fe3ac386ecf08450af8e55f064dd2c))
+* typed JSON documents for StoringKit ([#49](https://github.com/eduvhc/kitchen/issues/49)) ([9e4c510](https://github.com/eduvhc/kitchen/commit/9e4c510deedbae34d7b3a2a707249138cf835eae))
+
 ## [0.3.0](https://github.com/eduvhc/kitchen/compare/v0.2.4...v0.3.0) (2026-10-20)
 
 
