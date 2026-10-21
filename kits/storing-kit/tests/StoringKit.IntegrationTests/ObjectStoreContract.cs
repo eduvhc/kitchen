@@ -426,14 +426,14 @@ public abstract class ObjectStoreContract
     }
 
     [TestMethod]
-    public async Task A_malformed_json_document_throws_and_releases_the_connection()
+    public async Task A_malformed_json_document_is_an_invalid_document_and_releases_the_connection()
     {
         var key = Key("docs/broken.json");
         await Store.PutAsync(key, Text("""{"name":"orders","value":"""), new PutObjectOptions { ContentType = "application/json" }, Ct);
 
         for (var i = 0; i < 3; i++)
         {
-            await Assert.ThrowsAsync<System.Text.Json.JsonException>(() => Store.GetFromJsonAsync<Counter>(key, ct: Ct));
+            AssertError(await Store.GetFromJsonAsync<Counter>(key, ct: Ct), ErrorKind.Validation, StoringErrors.InvalidDocument);
         }
 
         Assert.IsTrue((await Store.ExistsAsync(key, Ct)).Value);

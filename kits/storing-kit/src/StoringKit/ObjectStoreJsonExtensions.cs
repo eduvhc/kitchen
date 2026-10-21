@@ -18,8 +18,8 @@ namespace StoringKit;
 /// safe to trim and compile ahead of time.
 /// </para>
 /// <para>
-/// Stored content that is not valid JSON for the type throws <see cref="JsonException"/>, as
-/// <c>HttpClient.GetFromJsonAsync</c> does: retrying cannot fix it, so it is not an expected outcome.
+/// Content that is not valid JSON for the type, and values that cannot be serialized, come back as
+/// <see cref="StoringErrors.InvalidDocument"/> rather than a thrown <see cref="JsonException"/>.
 /// </para>
 /// </remarks>
 public static class ObjectStoreJsonExtensions
@@ -40,10 +40,10 @@ public static class ObjectStoreJsonExtensions
     /// <param name="ct">Cancels the request and the read.</param>
     /// <returns>
     /// The value with the properties read alongside it, including the <see cref="StoredDocument{T}.ETag"/> to write
-    /// back with <see cref="WriteCondition.IfMatch"/>; or <see cref="StoringErrors.NotFound"/>, or a
+    /// back with <see cref="WriteCondition.IfMatch"/>; or <see cref="StoringErrors.NotFound"/>,
+    /// <see cref="StoringErrors.InvalidDocument"/> when the content is not valid JSON for <typeparamref name="T"/>, or a
     /// <see cref="ErrorKind.Transient"/> error when the request or the read fails on the way.
     /// </returns>
-    /// <exception cref="JsonException">The stored content is not valid JSON, or does not match <typeparamref name="T"/>.</exception>
     [RequiresUnreferencedCode(ReflectionUnreferencedCode)]
     [RequiresDynamicCode(ReflectionDynamicCode)]
     public static Task<Result<StoredDocument<T>>> GetFromJsonAsync<T>(
@@ -61,10 +61,10 @@ public static class ObjectStoreJsonExtensions
     /// <param name="ct">Cancels the request and the read.</param>
     /// <returns>
     /// The value with the properties read alongside it, including the <see cref="StoredDocument{T}.ETag"/> to write
-    /// back with <see cref="WriteCondition.IfMatch"/>; or <see cref="StoringErrors.NotFound"/>, or a
+    /// back with <see cref="WriteCondition.IfMatch"/>; or <see cref="StoringErrors.NotFound"/>,
+    /// <see cref="StoringErrors.InvalidDocument"/> when the content is not valid JSON for <typeparamref name="T"/>, or a
     /// <see cref="ErrorKind.Transient"/> error when the request or the read fails on the way.
     /// </returns>
-    /// <exception cref="JsonException">The stored content is not valid JSON, or does not match <typeparamref name="T"/>.</exception>
     public static async Task<Result<StoredDocument<T>>> GetFromJsonAsync<T>(
         this IObjectStore store,
         string key,
@@ -82,16 +82,9 @@ public static class ObjectStoreJsonExtensions
         }
 
         await using var content = get.Value;
+        var read = await content.ReadFromJsonAsync(jsonTypeInfo, ct).ConfigureAwait(false);
 
-        try
-        {
-            var value = await JsonSerializer.DeserializeAsync(content.Content, jsonTypeInfo, ct).ConfigureAwait(false);
-            return new StoredDocument<T>(value, content.Properties);
-        }
-        catch (Exception ex) when (ObjectStore.TranslateReadException(ex, ct) is { } error)
-        {
-            return error;
-        }
+        return read.IsSuccess ? new StoredDocument<T>(read.Value, content.Properties) : read.Error;
     }
 
     /// <summary>
@@ -109,8 +102,9 @@ public static class ObjectStoreJsonExtensions
     /// <param name="jsonOptions">Serializer options; <see langword="null"/> for <see cref="JsonSerializerDefaults.Web"/>.</param>
     /// <param name="ct">Cancels the upload.</param>
     /// <returns>
-    /// A receipt with the new ETag; or <see cref="StoringErrors.AlreadyExists"/> /
-    /// <see cref="StoringErrors.PreconditionFailed"/> when the condition did not hold.
+    /// A receipt with the new ETag; <see cref="StoringErrors.AlreadyExists"/> /
+    /// <see cref="StoringErrors.PreconditionFailed"/> when the condition did not hold; or
+    /// <see cref="StoringErrors.InvalidDocument"/> when <paramref name="value"/> cannot be serialized.
     /// </returns>
     [RequiresUnreferencedCode(ReflectionUnreferencedCode)]
     [RequiresDynamicCode(ReflectionDynamicCode)]
@@ -138,8 +132,9 @@ public static class ObjectStoreJsonExtensions
     /// </param>
     /// <param name="ct">Cancels the upload.</param>
     /// <returns>
-    /// A receipt with the new ETag; or <see cref="StoringErrors.AlreadyExists"/> /
-    /// <see cref="StoringErrors.PreconditionFailed"/> when the condition did not hold.
+    /// A receipt with the new ETag; <see cref="StoringErrors.AlreadyExists"/> /
+    /// <see cref="StoringErrors.PreconditionFailed"/> when the condition did not hold; or
+    /// <see cref="StoringErrors.InvalidDocument"/> when <paramref name="value"/> cannot be serialized.
     /// </returns>
     public static async Task<Result<PutReceipt>> PutAsJsonAsync<T>(
         this IObjectStore store,
@@ -154,7 +149,16 @@ public static class ObjectStoreJsonExtensions
 
         // A seekable buffer keeps the end-to-end MD5 and spares the S3 provider its temporary file.
         using var content = new MemoryStream();
-        JsonSerializer.Serialize(content, value, jsonTypeInfo);
+
+        try
+        {
+            JsonSerializer.Serialize(content, value, jsonTypeInfo);
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        {
+            return StoringErrors.BadDocument($"The value for '{key}' cannot be serialized as JSON: {ex.Message}");
+        }
+
         content.Position = 0;
 
         return await store.PutAsync(key, content, WithJsonContentType(options), ct).ConfigureAwait(false);
@@ -168,11 +172,14 @@ public static class ObjectStoreJsonExtensions
     /// <param name="content">An object opened with <see cref="IObjectStore.GetAsync"/>.</param>
     /// <param name="jsonOptions">Serializer options; <see langword="null"/> for <see cref="JsonSerializerDefaults.Web"/>.</param>
     /// <param name="ct">Cancels the read.</param>
-    /// <returns>The value; <see langword="default"/> when the content is the JSON literal <c>null</c>.</returns>
-    /// <exception cref="JsonException">The content is not valid JSON, or does not match <typeparamref name="T"/>.</exception>
+    /// <returns>
+    /// The value, <see langword="default"/> when the content is the JSON literal <c>null</c>; or
+    /// <see cref="StoringErrors.InvalidDocument"/> when it is not valid JSON for <typeparamref name="T"/>, or a
+    /// <see cref="ErrorKind.Transient"/> error when the read fails on the way.
+    /// </returns>
     [RequiresUnreferencedCode(ReflectionUnreferencedCode)]
     [RequiresDynamicCode(ReflectionDynamicCode)]
-    public static Task<T?> ReadFromJsonAsync<T>(
+    public static Task<Result<T?>> ReadFromJsonAsync<T>(
         this ObjectContent content,
         JsonSerializerOptions? jsonOptions = null,
         CancellationToken ct = default) =>
@@ -186,9 +193,12 @@ public static class ObjectStoreJsonExtensions
     /// <param name="content">An object opened with <see cref="IObjectStore.GetAsync"/>.</param>
     /// <param name="jsonTypeInfo">The metadata for <typeparamref name="T"/>, such as <c>AppJsonContext.Default.Order</c>.</param>
     /// <param name="ct">Cancels the read.</param>
-    /// <returns>The value; <see langword="default"/> when the content is the JSON literal <c>null</c>.</returns>
-    /// <exception cref="JsonException">The content is not valid JSON, or does not match <typeparamref name="T"/>.</exception>
-    public static async Task<T?> ReadFromJsonAsync<T>(
+    /// <returns>
+    /// The value, <see langword="default"/> when the content is the JSON literal <c>null</c>; or
+    /// <see cref="StoringErrors.InvalidDocument"/> when it is not valid JSON for <typeparamref name="T"/>, or a
+    /// <see cref="ErrorKind.Transient"/> error when the read fails on the way.
+    /// </returns>
+    public static async Task<Result<T?>> ReadFromJsonAsync<T>(
         this ObjectContent content,
         JsonTypeInfo<T> jsonTypeInfo,
         CancellationToken ct = default)
@@ -196,7 +206,19 @@ public static class ObjectStoreJsonExtensions
         ArgumentNullException.ThrowIfNull(content);
         ArgumentNullException.ThrowIfNull(jsonTypeInfo);
 
-        return await JsonSerializer.DeserializeAsync(content.Content, jsonTypeInfo, ct).ConfigureAwait(false);
+        try
+        {
+            return await JsonSerializer.DeserializeAsync(content.Content, jsonTypeInfo, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        {
+            return StoringErrors.BadDocument(
+                $"The object at '{content.Properties.Key}' is not valid JSON for {typeof(T).Name}: {ex.Message}");
+        }
+        catch (Exception ex) when (ObjectStore.TranslateReadException(ex, ct) is { } error)
+        {
+            return error;
+        }
     }
 
     [RequiresUnreferencedCode(ReflectionUnreferencedCode)]

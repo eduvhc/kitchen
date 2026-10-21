@@ -156,14 +156,29 @@ public sealed class ObjectStoreJsonTests
     [DataRow("not json", DisplayName = "not json")]
     [DataRow("[1,2,3]", DisplayName = "wrong shape")]
     [DataRow("{\"quantity\":\"many\"}", DisplayName = "wrong property type")]
-    public async Task A_malformed_document_throws_json_exception_and_releases_the_stream(string stored)
+    public async Task A_malformed_document_is_an_invalid_document_and_releases_the_stream(string stored)
     {
         using var store = new FakeObjectStore();
         await store.PutAsync("orders/1.json", new MemoryStream(Encoding.UTF8.GetBytes(stored)), ct: Ct);
 
-        await Assert.ThrowsAsync<JsonException>(() => store.GetFromJsonAsync<Order>("orders/1.json", ct: Ct));
+        var get = await store.GetFromJsonAsync<Order>("orders/1.json", ct: Ct);
 
+        ObjectStoreTests.AssertError(get, StoringErrors.InvalidDocument, ErrorKind.Validation);
+        StringAssert.Contains(get.Error!.Message, "orders/1.json");
         Assert.IsFalse(store.Opened.Single().CanRead, "the response stream was not disposed");
+    }
+
+    [TestMethod]
+    public async Task A_value_that_cannot_be_serialized_is_an_invalid_document_and_nothing_is_written()
+    {
+        using var store = new FakeObjectStore();
+        var cycle = new Dictionary<string, object>();
+        cycle["self"] = cycle;
+
+        var put = await store.PutAsJsonAsync("orders/1.json", cycle, ct: Ct);
+
+        ObjectStoreTests.AssertError(put, StoringErrors.InvalidDocument, ErrorKind.Validation);
+        Assert.IsEmpty(store.Writes);
     }
 
     [TestMethod]
@@ -214,7 +229,8 @@ public sealed class ObjectStoreJsonTests
         await using var content = (await store.GetAsync("orders/1.json", Ct)).Value;
         var order = await content.ReadFromJsonAsync<Order>(ct: Ct);
 
-        Assert.AreEqual(Ada, order);
+        Assert.IsTrue(order.IsSuccess, order.ToString());
+        Assert.AreEqual(Ada, order.Value);
         Assert.IsTrue(content.Content.CanRead);
     }
 
@@ -230,19 +246,25 @@ public sealed class ObjectStoreJsonTests
 
         Assert.AreEqual(
             new Shipment("ord-1", "DHL"),
-            await shipment.ReadFromJsonAsync<Shipment>(new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower }, Ct));
-        Assert.AreEqual(Ada, await order.ReadFromJsonAsync(TestJsonContext.Default.Order, Ct));
+            (await shipment.ReadFromJsonAsync<Shipment>(new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower }, Ct)).Value);
+        Assert.AreEqual(Ada, (await order.ReadFromJsonAsync(TestJsonContext.Default.Order, Ct)).Value);
     }
 
     [TestMethod]
-    public async Task Read_from_json_throws_json_exception_on_malformed_content()
+    public async Task Read_from_json_returns_errors_for_malformed_content_and_lost_connections()
     {
         using var store = new FakeObjectStore();
         await store.PutAsync("orders/1.json", new MemoryStream("{"u8.ToArray()), ct: Ct);
 
-        await using var content = (await store.GetAsync("orders/1.json", Ct)).Value;
+        await using (var malformed = (await store.GetAsync("orders/1.json", Ct)).Value)
+        {
+            ObjectStoreTests.AssertError(await malformed.ReadFromJsonAsync<Order>(ct: Ct), StoringErrors.InvalidDocument, ErrorKind.Validation);
+        }
 
-        await Assert.ThrowsAsync<JsonException>(() => content.ReadFromJsonAsync<Order>(ct: Ct));
+        store.OpenRead = _ => new FailingStream(new IOException("reset", new SocketException()));
+        await using var dropped = (await store.GetAsync("orders/1.json", Ct)).Value;
+
+        ObjectStoreTests.AssertError(await dropped.ReadFromJsonAsync(TestJsonContext.Default.Order, Ct), StoringErrors.Unavailable, ErrorKind.Transient);
     }
 
     private async Task<string> StoredTextAsync(FakeObjectStore store, string key)

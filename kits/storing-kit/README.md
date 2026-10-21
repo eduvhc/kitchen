@@ -55,6 +55,7 @@ Expected failures come back as a failed `Result` carrying a ResultingKit `Error`
 | `storing.invalid_argument` | `Validation` | Content type, MD5 format, page size or URL lifetime out of range |
 | `storing.checksum_mismatch` | `Validation` | The service received bytes that do not match the MD5 |
 | `storing.too_large` | `Validation` | Bigger than the provider takes in one write |
+| `storing.invalid_document` | `Validation` | A stored object is not valid JSON for the type read, or a value cannot be serialized as JSON |
 | `storing.throttled` | `Transient` | 429, S3 `SlowDown`, Azure `ServerBusy` |
 | `storing.unavailable` | `Transient` | 5xx, connection failures |
 | `storing.timeout` | `Transient` | Request timeouts |
@@ -76,7 +77,7 @@ ETags are opaque; pass back exactly what a `PutReceipt` or `StoredObject` gave y
 ```csharp
 // Read: the value plus the properties from the same response, including the ETag
 Result<StoredDocument<Order>> read = await store.GetFromJsonAsync<Order>($"orders/{id}.json", ct: ct);
-if (read.IsFailure) return read.Error;                // storing.not_found, transient, …
+if (read.IsFailure) return read.Error;                // storing.not_found, storing.invalid_document, transient, …
 var (order, properties) = read.Value;
 
 // Compare-and-swap: write back only if nobody else has since
@@ -94,14 +95,14 @@ var typed = await store.GetFromJsonAsync(key, AppJsonContext.Default.Order);
 
 // Already holding an open object
 await using var content = (await store.GetAsync(key)).Value;
-Order? o = await content.ReadFromJsonAsync<Order>();
+Result<Order?> o = await content.ReadFromJsonAsync<Order>();
 ```
 
 - **Serializer options** default to `JsonSerializerDefaults.Web` (camelCase, case-insensitive reads), as `HttpClient`'s helpers do. Pass `jsonOptions`, or a `JsonTypeInfo<T>` from a `JsonSerializerContext`. The reflection overloads are marked `RequiresUnreferencedCode` and `RequiresDynamicCode`.
 - **Writes** serialize into a seekable in-memory buffer, never a string, so the end-to-end `Content-MD5` check still applies and the S3 provider skips its temporary file. The content type is `application/json` unless `PutObjectOptions.ContentType` says otherwise. The options you pass are not changed.
 - **Metadata is not carried over.** A put writes exactly the metadata it is given, like `PutAsync`. To keep it across a read-modify-write, copy `properties.Metadata` into the new options.
 - **Reads** deserialize straight from the response stream and dispose it. The ETag comes from the same response as the bytes, so it is always the version you read. A connection lost mid-read is a `Transient` error, like a failed request.
-- **A stored object that is not valid JSON for the type throws `JsonException`**, as `HttpClient.GetFromJsonAsync` does, because no retry fixes it. The JSON literal `null` reads as `default`, so `StoredDocument<T>.Value` is `T?`.
+- **Bad JSON is a result, not an exception.** A stored object that is not valid JSON for the type is `storing.invalid_document`, with the stream already released, so a journal-style reader can quarantine the record and move on. A value that cannot be serialized (a reference cycle, an unsupported type) is the same error on a put, and nothing is written. The JSON literal `null` reads as `default`, so `StoredDocument<T>.Value` is `T?`.
 
 There is no built-in update loop. A read-modify-write takes a few lines, and keeping it in your code keeps the retry policy yours:
 

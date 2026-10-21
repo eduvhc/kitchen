@@ -38,6 +38,12 @@ public static class StoringErrors
     /// <summary><see cref="ErrorKind.Validation"/>: the content is larger than the provider accepts in one write.</summary>
     public const string TooLarge = "storing.too_large";
 
+    /// <summary>
+    /// <see cref="ErrorKind.Validation"/>: a stored object is not valid JSON for the type it was read as, or a value
+    /// cannot be serialized as JSON.
+    /// </summary>
+    public const string InvalidDocument = "storing.invalid_document";
+
     /// <summary><see cref="ErrorKind.Transient"/>: the service asked the caller to slow down (429, 503 SlowDown, ServerBusy).</summary>
     public const string Throttled = "storing.throttled";
 
@@ -89,4 +95,6 @@ public static class StoringErrors
     internal static Error BadMetadata(string reason) => Error.Validation(InvalidMetadata, $"Invalid metadata: {reason}");
 
     internal static Error BadArgument(string reason) => Error.Validation(InvalidArgument, reason);
+
+    internal static Error BadDocument(string reason) => Error.Validation(InvalidDocument, reason);
 }
