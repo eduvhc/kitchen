@@ -132,16 +132,17 @@ public sealed class PostgresAdvisoryLockTests
     }
 
     [TestMethod]
-    public async Task Wrong_credentials_are_misconfiguration_and_throw()
+    public async Task Wrong_credentials_are_a_misconfiguration_result()
     {
         var builder = new NpgsqlConnectionStringBuilder(TestHost.Postgres.ConnectionString) { Password = "wrong" };
         var services = new ServiceCollection();
         services.AddLocking().UsePostgres(o => o.ConnectionString = builder.ConnectionString);
         await using var provider = services.BuildServiceProvider();
 
-        var ex = await Assert.ThrowsExactlyAsync<PostgresException>(
-            () => provider.GetRequiredService<IDistributedLock>().TryAcquireAsync(_prefix + "k", Ct));
-        Assert.AreEqual("28P01", ex.SqlState);
+        var result = await provider.GetRequiredService<IDistributedLock>().TryAcquireAsync(_prefix + "k", Ct);
+
+        Assert.AreEqual(LockingErrors.Misconfigured, result.Error?.Code);
+        StringAssert.Contains(result.Error!.Message, "28P01");
     }
 
     private async Task<long> CountAdvisoryLocksAsync(string key)

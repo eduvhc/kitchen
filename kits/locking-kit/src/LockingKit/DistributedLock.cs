@@ -11,58 +11,39 @@ namespace LockingKit;
 /// outcomes into results, hands each acquired lease to a <see cref="LockHandle"/> that renews it, and records spans and
 /// metrics. A backend only makes attempts.
 /// </summary>
-internal sealed class DistributedLock : IDistributedLock, IAsyncDisposable, IDisposable
+/// <remarks>
+/// Every outcome of an acquisition is a <see cref="Result"/>: contention, outages, misconfiguration, a disposed
+/// provider, a bad key. Only caller cancellation throws, as cooperative cancellation does everywhere in .NET.
+/// </remarks>
+internal sealed class DistributedLock(
+    string name,
+    string provider,
+    ILockBackend backend,
+    LockingOptions options,
+    TimeProvider timeProvider,
+    LockingKitMetrics metrics,
+    Func<double>? random = null) : IDistributedLock, IAsyncDisposable, IDisposable
 {
-    private readonly ILockBackend _backend;
-    private readonly RetryBackoff _backoff;
+    private readonly ILockBackend _backend = backend ?? throw new ArgumentNullException(nameof(backend));
+    private readonly RetryBackoff _backoff = new(options.MinRetryDelay, options.MaxRetryDelay, random);
     private readonly ConcurrentDictionary<LockHandle, byte> _live = new();
     private int _disposed;
 
-    public DistributedLock(
-        string name,
-        string provider,
-        ILockBackend backend,
-        LockingOptions options,
-        TimeProvider timeProvider,
-        LockingKitMetrics metrics,
-        Func<double>? random = null)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        ArgumentException.ThrowIfNullOrWhiteSpace(provider);
-        ArgumentNullException.ThrowIfNull(backend);
-        ArgumentNullException.ThrowIfNull(options);
-        ArgumentNullException.ThrowIfNull(timeProvider);
-        ArgumentNullException.ThrowIfNull(metrics);
+    public string Name { get; } = string.IsNullOrWhiteSpace(name) ? throw new ArgumentException("A name is required.", nameof(name)) : name;
 
-        if (options.ValidateEngineSettings() is { } problem)
-        {
-            throw new ArgumentException(problem, nameof(options));
-        }
+    public string Provider { get; } = string.IsNullOrWhiteSpace(provider) ? throw new ArgumentException("A provider is required.", nameof(provider)) : provider;
 
-        Name = name;
-        Provider = provider;
-        _backend = backend;
-        Timing = backend.Timing ?? throw new ArgumentException("The backend has no timing.", nameof(backend));
-        TimeProvider = timeProvider;
-        Metrics = metrics;
-        ReleaseTimeout = options.ReleaseTimeout;
-        _backoff = new RetryBackoff(options.MinRetryDelay, options.MaxRetryDelay, random);
-        Room = new WaitingRoom(timeProvider);
-    }
+    public LeaseTiming Timing { get; } = backend.Timing ?? throw new ArgumentException("The backend has no timing.", nameof(backend));
 
-    public string Name { get; }
+    public TimeProvider TimeProvider { get; } = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
-    public string Provider { get; }
+    public TimeSpan ReleaseTimeout { get; } = options.ReleaseTimeout > TimeSpan.Zero
+        ? options.ReleaseTimeout
+        : throw new ArgumentOutOfRangeException(nameof(options), "ReleaseTimeout must be greater than zero.");
 
-    public LeaseTiming Timing { get; }
+    internal LockingKitMetrics Metrics { get; } = metrics ?? throw new ArgumentNullException(nameof(metrics));
 
-    public TimeProvider TimeProvider { get; }
-
-    public TimeSpan ReleaseTimeout { get; }
-
-    internal LockingKitMetrics Metrics { get; }
-
-    internal WaitingRoom Room { get; }
+    internal WaitingRoom Room { get; } = new(timeProvider);
 
     internal ILockBackend Backend => _backend;
 
@@ -132,8 +113,6 @@ internal sealed class DistributedLock : IDistributedLock, IAsyncDisposable, IDis
 
     private async Task<Result<ILockHandle>> RunAsync(string operation, string key, TimeSpan timeout, CancellationToken ct)
     {
-        ObjectDisposedException.ThrowIf(_disposed == 1, this);
-
         var start = TimeProvider.GetTimestamp();
         using var activity = LockingKitInstrumentation.ActivitySource.StartActivity($"{operation} {Name}", ActivityKind.Client);
         Tag(activity, operation);
@@ -143,7 +122,11 @@ internal sealed class DistributedLock : IDistributedLock, IAsyncDisposable, IDis
 
         try
         {
-            if (LockKeys.Validate(key) is { } keyError)
+            if (_disposed == 1)
+            {
+                result = LockingErrors.ProviderDisposed(Name);
+            }
+            else if (LockKeys.Validate(key) is { } keyError)
             {
                 result = keyError;
             }
@@ -166,23 +149,6 @@ internal sealed class DistributedLock : IDistributedLock, IAsyncDisposable, IDis
             activity?.SetTag(LockingKitTags.Outcome, "cancelled");
             activity?.SetTag(LockingKitTags.Attempts, attempts);
             Metrics.Acquire(Name, Provider, operation, "cancelled", errorType: null, errorKind: null, TimeProvider.GetElapsedTime(start));
-            throw;
-        }
-        catch (Exception ex)
-        {
-            var errorType = ex.GetType().FullName ?? ex.GetType().Name;
-
-            if (activity is not null)
-            {
-                activity.SetTag(LockingKitTags.Outcome, LockingKitTags.Failure);
-                activity.SetTag(LockingKitTags.ErrorType, errorType);
-                activity.SetTag(LockingKitTags.Attempts, attempts);
-
-                // No exception event: provider messages can carry the blob URL, and with it the key.
-                activity.SetStatus(ActivityStatusCode.Error);
-            }
-
-            Metrics.Acquire(Name, Provider, operation, LockingKitTags.Failure, errorType, errorKind: null, TimeProvider.GetElapsedTime(start));
             throw;
         }
 
@@ -257,9 +223,9 @@ internal sealed class DistributedLock : IDistributedLock, IAsyncDisposable, IDis
         {
             lease = await _backend.TryAcquireAsync(key, ct).ConfigureAwait(false);
         }
-        catch (Exception ex) when (Translate(ex, ct) is { } error)
+        catch (Exception ex) when (!(ct.IsCancellationRequested && ex is OperationCanceledException))
         {
-            return error;
+            return Translate(ex);
         }
 
         if (lease is null)
@@ -272,7 +238,7 @@ internal sealed class DistributedLock : IDistributedLock, IAsyncDisposable, IDis
             // Acquired, but nobody is left to own it: give it straight back.
             await ReleaseQuietlyAsync(lease).ConfigureAwait(false);
             ct.ThrowIfCancellationRequested();
-            ObjectDisposedException.ThrowIf(true, this);
+            return LockingErrors.ProviderDisposed(Name);
         }
 
         var handle = new LockHandle(this, key, lease, requestedAt);
@@ -311,15 +277,14 @@ internal sealed class DistributedLock : IDistributedLock, IAsyncDisposable, IDis
         return error;
     }
 
-    private Error? Translate(Exception exception, CancellationToken ct)
-    {
-        if (ct.IsCancellationRequested && exception is OperationCanceledException)
-        {
-            return null;
-        }
-
-        return _backend.TranslateException(exception) ?? TranslateTransportException(exception);
-    }
+    /// <summary>
+    /// Every failed attempt becomes an error: the backend's classification first, then transport failures, and
+    /// anything left is <see cref="LockingErrors.BackendFailed"/> rather than an exception.
+    /// </summary>
+    private Error Translate(Exception exception) =>
+        _backend.TranslateException(exception)
+        ?? TranslateTransportException(exception)
+        ?? LockingErrors.Unexpected(exception);
 
     /// <summary>
     /// Failures below the provider SDK: timeouts and connection failures are transient. Unwraps

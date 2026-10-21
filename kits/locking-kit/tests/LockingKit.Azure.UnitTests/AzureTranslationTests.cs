@@ -28,13 +28,22 @@ public sealed class AzureTranslationTests
     }
 
     [TestMethod]
+    [DataRow(401, "NoAuthenticationInformation")]
     [DataRow(403, "AuthorizationPermissionMismatch")]
     [DataRow(403, "AuthenticationFailed")]
     [DataRow(404, "ContainerNotFound")]
-    [DataRow(400, "InvalidHeaderValue")]
-    public void Misconfiguration_and_bugs_are_not_mapped_so_they_throw(int status, string code)
+    public void Credentials_permissions_and_a_missing_container_are_misconfiguration(int status, string code)
     {
-        Assert.IsNull(AzureBlobLeaseBackend.Translate(new RequestFailedException(status, "failed", code, null)));
+        var error = AzureBlobLeaseBackend.Translate(new RequestFailedException(status, "failed", code, null));
+
+        Assert.AreEqual(LockingErrors.Misconfigured, error?.Code);
+        StringAssert.Contains(error!.Message, code);
+    }
+
+    [TestMethod]
+    public void Anything_else_is_left_to_the_engine_which_reports_it_as_a_backend_failure()
+    {
+        Assert.IsNull(AzureBlobLeaseBackend.Translate(new RequestFailedException(400, "failed", "InvalidHeaderValue", null)));
     }
 
     [TestMethod]

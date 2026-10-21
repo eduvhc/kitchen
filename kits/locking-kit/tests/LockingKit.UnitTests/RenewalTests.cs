@@ -238,7 +238,7 @@ public sealed class RenewalTests
     }
 
     [TestMethod]
-    public async Task ThrowIfLost_throws_a_cancellation_carrying_the_reason_and_the_lost_token()
+    public async Task EnsureHeld_reports_a_loss_as_a_result_and_ThrowIfLost_as_a_cancellation()
     {
         var time = Engines.Clock();
         var backend = ScriptedBackend.Expiring(Lease);
@@ -247,9 +247,15 @@ public sealed class RenewalTests
         var handle = await locks.HoldAsync("orders/42");
 
         handle.ThrowIfLost();
+        Assert.IsTrue(handle.EnsureHeld().IsSuccess);
 
         await time.AdvanceAsync(TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
         await Engines.UntilAsync(() => handle.IsLost, "the lock was revoked");
+
+        var check = handle.EnsureHeld();
+        Assert.AreEqual(LockingErrors.Lost, check.Error?.Code);
+        Assert.AreEqual(ResultingKit.ErrorKind.Conflict, check.Error?.Kind);
+        Assert.AreEqual("The lock 'orders/42' was lost (Revoked).", check.Error?.Message);
 
         var lost = Assert.ThrowsExactly<LockLostException>(handle.ThrowIfLost);
         Assert.IsInstanceOfType<OperationCanceledException>(lost);
@@ -259,6 +265,7 @@ public sealed class RenewalTests
 
         await handle.DisposeAsync();
         Assert.ThrowsExactly<ObjectDisposedException>(handle.ThrowIfLost);
+        Assert.AreEqual(LockingErrors.Lost, handle.EnsureHeld().Error?.Code);
     }
 
     [TestMethod]

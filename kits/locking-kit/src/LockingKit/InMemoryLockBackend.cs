@@ -7,23 +7,14 @@ namespace LockingKit;
 /// renewed, an expired lease can be taken by anyone, and every acquisition gets a larger fencing token — so code and
 /// tests that run against it see the same behaviour as against Azure, within one process.
 /// </summary>
-internal sealed class InMemoryLockBackend : ILockBackend
+internal sealed class InMemoryLockBackend(TimeSpan leaseDuration, TimeProvider timeProvider) : ILockBackend
 {
     private readonly Dictionary<string, Lease> _leases = new(StringComparer.Ordinal);
-    private readonly TimeProvider _time;
-    private readonly long _durationTicks;
+    private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly long _durationTicks = (long)(leaseDuration.Ticks * ((double)timeProvider.TimestampFrequency / TimeSpan.TicksPerSecond));
     private long _fence;
 
-    public InMemoryLockBackend(TimeSpan leaseDuration, TimeProvider timeProvider)
-    {
-        ArgumentNullException.ThrowIfNull(timeProvider);
-
-        Timing = LeaseTiming.Expiring(leaseDuration);
-        _time = timeProvider;
-        _durationTicks = (long)(leaseDuration.Ticks * ((double)timeProvider.TimestampFrequency / TimeSpan.TicksPerSecond));
-    }
-
-    public LeaseTiming Timing { get; }
+    public LeaseTiming Timing { get; } = LeaseTiming.Expiring(leaseDuration);
 
     /// <summary>The number of keys with a live (unexpired) lease.</summary>
     internal int HeldCount

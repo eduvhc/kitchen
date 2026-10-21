@@ -11,9 +11,12 @@ internal static class LockKeys
 {
     private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
-    public static Error? Validate(string key)
+    public static Error? Validate(string? key)
     {
-        ArgumentNullException.ThrowIfNull(key);
+        if (key is null)
+        {
+            return LockingErrors.BadKey("the key is null.");
+        }
 
         if (key.Length == 0)
         {

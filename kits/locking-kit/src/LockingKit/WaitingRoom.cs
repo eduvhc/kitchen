@@ -155,19 +155,12 @@ internal sealed class WaitingRoom(TimeProvider timeProvider)
     }
 
     /// <summary>The front of the line for one key.</summary>
-    internal sealed class Turn : IDisposable
+    internal sealed class Turn(WaitingRoom room, string key, Line line) : IDisposable
     {
-        private readonly WaitingRoom _room;
-        private readonly string _key;
-        private readonly Line _line;
+        private readonly WaitingRoom _room = room;
+        private readonly string _key = key;
+        private readonly Line _line = line;
         private int _ended;
-
-        public Turn(WaitingRoom room, string key, Line line)
-        {
-            _room = room;
-            _key = key;
-            _line = line;
-        }
 
         /// <summary>
         /// The signal a local release completes. Take it before an attempt, so a release that lands between the attempt

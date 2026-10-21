@@ -56,7 +56,7 @@ public sealed class NightlyExport(IDistributedLock locks)
 
         foreach (var batch in Batches())
         {
-            handle.ThrowIfLost();                       // LockLostException, an OperationCanceledException
+            if (handle.EnsureHeld().IsFailure) return;   // locking.lost: stop instead of working unprotected
             await ExportAsync(batch, handle.LostToken);
         }
     }
@@ -77,7 +77,8 @@ The handle:
 | --- | --- |
 | `LostToken` | Cancelled once the lock is no longer held, because it was lost or because the handle was disposed. Link it into the protected work. |
 | `IsLost`, `LossReason` | `Expired` (renewals failed until the deadline), `Revoked` (the backend says it is gone), `ConnectionLost` (PostgreSQL). Not set by a normal release. |
-| `ThrowIfLost()` | Throws `LockLostException` after a loss, `ObjectDisposedException` after dispose. |
+| `EnsureHeld()` | A `Result`: success while held, `locking.lost` once lost or released. Call it before each step that must not run unprotected. |
+| `ThrowIfLost()` | The same check in cancellation style, for work that already stops on `OperationCanceledException`: throws `LockLostException`, or `ObjectDisposedException` after dispose. |
 | `FencingToken` | Grows with every holder of the key, when the provider issues them. See [Guarantees](#guarantees). |
 | `DisposeAsync()` | Stops renewal, then releases with a 5 s timeout. Idempotent and safe to call concurrently. |
 
@@ -92,8 +93,12 @@ A handle renews itself in the background. The `ct` you pass to acquire only canc
 | `locking.invalid_key` | `Validation` | Empty, longer than 512 characters, or not valid Unicode |
 | `locking.invalid_argument` | `Validation` | A negative timeout |
 | `locking.unavailable` | `Transient` | The backend could not be reached, timed out, throttled or failed. The only kind worth retrying. |
+| `locking.misconfigured` | `Failure` | Wrong credentials, a denied permission, a container or database that does not exist |
+| `locking.backend_failed` | `Failure` | Any other backend failure; the message names the exception |
+| `locking.disposed` | `Failure` | The provider was disposed (the host is shutting down) |
+| `locking.lost` | `Conflict` | From `EnsureHeld()`: the lock was lost or released |
 
-A wait that never reached the backend ends in `locking.unavailable`, not `locking.timeout`, so an outage is not mistaken for contention. Misconfiguration **throws** the provider's exception: wrong credentials, a container or database that does not exist, a denied permission. Caller cancellation throws `OperationCanceledException`. Locks are not reentrant: acquiring a key your own process holds is `locking.busy`.
+A wait that never reached the backend ends in `locking.unavailable`, not `locking.timeout`, so an outage is not mistaken for contention. Every outcome is a result, never an exception: misconfiguration and unexpected backend failures included, and a waiter stops at the first failure no retry can fix. The one exception is cancellation: cancelling your `ct` throws `OperationCanceledException`, as it does throughout .NET. Locks are not reentrant: acquiring a key your own process holds is `locking.busy`.
 
 ### Keys
 

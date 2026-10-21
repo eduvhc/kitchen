@@ -18,13 +18,17 @@ public interface ILockBackend : IAsyncDisposable
     /// <param name="key">A key the engine has already validated.</param>
     /// <param name="ct">Cancels the attempt.</param>
     /// <returns>The lease when acquired; <see langword="null"/> when someone else holds the lock.</returns>
-    /// <remarks>Throw on any other outcome; <see cref="TranslateException"/> decides what is expected.</remarks>
+    /// <remarks>
+    /// Throw on any other outcome; the engine turns every exception into a result through
+    /// <see cref="TranslateException"/>, so none reaches the caller.
+    /// </remarks>
     Task<ILockLease?> TryAcquireAsync(string key, CancellationToken ct);
 
     /// <summary>
-    /// Classifies an exception from <see cref="TryAcquireAsync"/>. Return an <see cref="Error"/> for an expected
-    /// outcome — normally <see cref="LockingErrors.BackendUnavailable"/> for throttling, timeouts and outages — or
-    /// <see langword="null"/> to let it propagate. Timeouts and socket failures are classified by the engine already.
+    /// Classifies an exception from <see cref="TryAcquireAsync"/>: <see cref="LockingErrors.BackendUnavailable"/> for
+    /// throttling, timeouts and outages, <see cref="LockingErrors.Misconfiguration"/> for credentials, permissions and
+    /// missing resources. Return <see langword="null"/> to leave it to the engine, which reports timeouts and socket
+    /// failures as unavailable and anything else as <see cref="LockingErrors.BackendFailed"/>.
     /// </summary>
     /// <param name="exception">What the attempt threw.</param>
     Error? TranslateException(Exception exception);

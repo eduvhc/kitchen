@@ -163,7 +163,7 @@ public sealed class AzureBlobLeaseTests
     }
 
     [TestMethod]
-    public async Task A_container_that_does_not_exist_is_misconfiguration_and_throws()
+    public async Task A_container_that_does_not_exist_is_a_misconfiguration_result()
     {
         var services = new ServiceCollection();
         services.AddLocking().UseAzureBlobLeases(o =>
@@ -173,8 +173,9 @@ public sealed class AzureBlobLeaseTests
         });
         await using var provider = services.BuildServiceProvider();
 
-        var ex = await Assert.ThrowsExactlyAsync<RequestFailedException>(
-            () => provider.GetRequiredService<IDistributedLock>().TryAcquireAsync(_prefix + "k", Ct));
-        Assert.AreEqual("ContainerNotFound", ex.ErrorCode);
+        var result = await provider.GetRequiredService<IDistributedLock>().TryAcquireAsync(_prefix + "k", Ct);
+
+        Assert.AreEqual(LockingErrors.Misconfigured, result.Error?.Code);
+        StringAssert.Contains(result.Error!.Message, "ContainerNotFound");
     }
 }

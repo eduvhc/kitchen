@@ -11,23 +11,15 @@ namespace LockingKit.Postgres;
 /// A connection that may still hold a lock is never returned to the pool: when unlocking fails or cannot be confirmed,
 /// the pool is told to close it instead (<see cref="NpgsqlConnection.ClearPool"/>), which ends the session server-side.
 /// </remarks>
-internal sealed class PostgresAdvisoryLockBackend : ILockBackend
+internal sealed class PostgresAdvisoryLockBackend(
+    NpgsqlDataSource dataSource,
+    bool ownsDataSource,
+    TimeSpan healthCheckInterval,
+    bool fencingTokens) : ILockBackend
 {
-    private readonly NpgsqlDataSource _dataSource;
-    private readonly bool _ownsDataSource;
-    private readonly bool _fencing;
+    private readonly NpgsqlDataSource _dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
 
-    public PostgresAdvisoryLockBackend(NpgsqlDataSource dataSource, bool ownsDataSource, TimeSpan healthCheckInterval, bool fencingTokens)
-    {
-        ArgumentNullException.ThrowIfNull(dataSource);
-
-        _dataSource = dataSource;
-        _ownsDataSource = ownsDataSource;
-        _fencing = fencingTokens;
-        Timing = LeaseTiming.ConnectionHeld(healthCheckInterval);
-    }
-
-    public LeaseTiming Timing { get; }
+    public LeaseTiming Timing { get; } = LeaseTiming.ConnectionHeld(healthCheckInterval);
 
     public async Task<ILockLease?> TryAcquireAsync(string key, CancellationToken ct)
     {
@@ -44,7 +36,7 @@ internal sealed class PostgresAdvisoryLockBackend : ILockBackend
                 return null;
             }
 
-            if (_fencing)
+            if (fencingTokens)
             {
                 await lease.IssueFencingTokenAsync(ct).ConfigureAwait(false);
             }
@@ -63,7 +55,7 @@ internal sealed class PostgresAdvisoryLockBackend : ILockBackend
 
     public async ValueTask DisposeAsync()
     {
-        if (_ownsDataSource)
+        if (ownsDataSource)
         {
             await _dataSource.DisposeAsync().ConfigureAwait(false);
         }
@@ -71,13 +63,16 @@ internal sealed class PostgresAdvisoryLockBackend : ILockBackend
 
     internal static Error? Translate(Exception exception) => exception switch
     {
-        // Wrong credentials, a missing database, a denied permission: misconfiguration, so it throws.
-        PostgresException { SqlState: "28P01" or "28000" or "3D000" or "42501" } => null,
+        // Wrong credentials, a missing database, a denied permission: no retry fixes these.
+        PostgresException { SqlState: "28P01" or "28000" or "3D000" or "42501" } postgres =>
+            LockingErrors.Misconfiguration($"{postgres.SqlState} {postgres.MessageText}"),
         NpgsqlException { IsTransient: true } => LockingErrors.BackendUnavailable(exception.Message),
 
         // Connection exceptions, insufficient resources, operator intervention (shutdown, failover).
         PostgresException { SqlState: ['0', '8', ..] or ['5', '3', ..] or ['5', '7', 'P', ..] } =>
             LockingErrors.BackendUnavailable(exception.Message),
+
+        // Anything else is reported by the engine as locking.backend_failed.
         _ => null,
     };
 }

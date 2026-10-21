@@ -15,42 +15,30 @@ namespace LockingKit;
 /// postpone the loss signal: the timer fires on time and cancels the renewal.
 /// </para>
 /// </remarks>
-internal sealed class LockHandle : ILockHandle
+internal sealed class LockHandle(DistributedLock owner, string key, ILockLease lease, long requestedAt) : ILockHandle
 {
     private const int Held = 0;
     private const int Lost = 1;
     private const int Disposed = 2;
 
-    private readonly DistributedLock _owner;
-    private readonly LeaseTiming _timing;
-    private readonly TimeProvider _time;
+    private readonly DistributedLock _owner = owner;
+    private readonly LeaseTiming _timing = owner.Timing;
+    private readonly TimeProvider _time = owner.TimeProvider;
     private readonly CancellationTokenSource _lost = new();
     private readonly CancellationTokenSource _stop = new();
     private readonly TaskCompletionSource _disposed = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private readonly ITimer _deadline;
     private readonly Lock _gate = new();
-    private readonly long _acquiredAt;
 
-    private long _confirmedAt;
+    // Created in Start: a timer callback needs the instance, which field initializers cannot reach.
+    private ITimer _deadline = null!;
+    private long _confirmedAt = requestedAt;
     private long _dueAt = long.MaxValue;
     private int _state;
     private int _disposeStarted;
     private LockLossReason? _reason;
     private Task _renewal = Task.CompletedTask;
 
-    public LockHandle(DistributedLock owner, string key, ILockLease lease, long requestedAt)
-    {
-        _owner = owner;
-        _timing = owner.Timing;
-        _time = owner.TimeProvider;
-        Key = key;
-        Lease = lease;
-        _acquiredAt = requestedAt;
-        _confirmedAt = requestedAt;
-        _deadline = _time.CreateTimer(static state => ((LockHandle)state!).OnDeadline(), this, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
-    }
-
-    public string Key { get; }
+    public string Key { get; } = key;
 
     public CancellationToken LostToken => _lost.Token;
 
@@ -69,9 +57,17 @@ internal sealed class LockHandle : ILockHandle
 
     public long? FencingToken => Lease.FencingToken;
 
-    internal ILockLease Lease { get; }
+    internal ILockLease Lease { get; } = lease;
 
-    internal long AcquiredAt => _acquiredAt;
+    internal long AcquiredAt { get; } = requestedAt;
+
+    public ResultingKit.Result EnsureHeld()
+    {
+        lock (_gate)
+        {
+            return _state == Held ? ResultingKit.Result.Success() : LockingErrors.NoLongerHeld(Key, _reason);
+        }
+    }
 
     public void ThrowIfLost()
     {
@@ -89,6 +85,8 @@ internal sealed class LockHandle : ILockHandle
     /// <summary>Arms the deadline and starts renewing. Called once, right after the lease was acquired.</summary>
     internal void Start()
     {
+        _deadline = _time.CreateTimer(static state => ((LockHandle)state!).OnDeadline(), this, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+
         lock (_gate)
         {
             if (_timing.GiveUpAfter is { } giveUp)

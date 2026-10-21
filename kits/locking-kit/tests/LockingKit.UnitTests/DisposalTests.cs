@@ -211,6 +211,8 @@ public sealed class DisposalTests
         Assert.IsTrue(backend.Disposed);
         Assert.IsTrue(first.LostToken.IsCancellationRequested);
         Assert.IsTrue(second.LostToken.IsCancellationRequested);
-        await Assert.ThrowsExactlyAsync<ObjectDisposedException>(() => locks.TryAcquireAsync("c"));
+        var afterwards = await locks.TryAcquireAsync("c");
+        Assert.AreEqual(LockingErrors.Disposed, afterwards.Error?.Code);
+        Assert.AreEqual(ResultingKit.ErrorKind.Failure, afterwards.Error?.Kind);
     }
 }

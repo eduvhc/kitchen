@@ -59,11 +59,13 @@ public sealed class AcquireTests
     }
 
     [TestMethod]
-    public async Task A_null_key_is_a_bug_and_throws()
+    public async Task A_null_key_is_a_validation_result_too()
     {
         await using var locks = Engines.Create(ScriptedBackend.Expiring(Lease), Engines.Clock());
 
-        await Assert.ThrowsExactlyAsync<ArgumentNullException>(() => locks.TryAcquireAsync(null!, TestContext.CancellationToken));
+        var result = await locks.TryAcquireAsync(null!, TestContext.CancellationToken);
+
+        Assert.AreEqual(LockingErrors.InvalidKey, result.Error?.Code);
     }
 
     [TestMethod]
@@ -104,7 +106,7 @@ public sealed class AcquireTests
     }
 
     [TestMethod]
-    public async Task The_backend_classifies_its_own_exceptions_and_anything_unclassified_throws()
+    public async Task The_backend_classifies_its_own_exceptions_and_anything_unclassified_is_a_failure_result()
     {
         var backend = ScriptedBackend.Expiring(Lease);
         backend.OnTranslate = ex => ex is ArithmeticException ? LockingErrors.BackendUnavailable("throttled") : null;
@@ -113,8 +115,35 @@ public sealed class AcquireTests
         backend.OnAcquire = (_, _) => throw new ArithmeticException();
         Assert.AreEqual(LockingErrors.Unavailable, (await locks.TryAcquireAsync("k", TestContext.CancellationToken)).Error?.Code);
 
+        backend.OnTranslate = ex => ex switch
+        {
+            ArithmeticException => LockingErrors.BackendUnavailable("throttled"),
+            UnauthorizedAccessException => LockingErrors.Misconfiguration("wrong credentials"),
+            _ => null,
+        };
         backend.OnAcquire = (_, _) => throw new UnauthorizedAccessException("wrong credentials");
-        await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => locks.TryAcquireAsync("k", TestContext.CancellationToken));
+        var misconfigured = await locks.TryAcquireAsync("k", TestContext.CancellationToken);
+        Assert.AreEqual(LockingErrors.Misconfigured, misconfigured.Error?.Code);
+        Assert.AreEqual(ErrorKind.Failure, misconfigured.Error?.Kind);
+
+        backend.OnAcquire = (_, _) => throw new InvalidOperationException("something nobody expected");
+        var failed = await locks.TryAcquireAsync("k", TestContext.CancellationToken);
+        Assert.AreEqual(LockingErrors.BackendFailed, failed.Error?.Code);
+        Assert.AreEqual(ErrorKind.Failure, failed.Error?.Kind);
+        StringAssert.Contains(failed.Error!.Message, "System.InvalidOperationException: something nobody expected");
+    }
+
+    [TestMethod]
+    public async Task Waiting_stops_at_the_first_failure_no_retry_can_fix()
+    {
+        var backend = ScriptedBackend.Expiring(Lease);
+        backend.OnAcquire = (_, _) => throw new InvalidOperationException("broken");
+        await using var locks = Engines.Create(backend, Engines.Clock());
+
+        var result = await locks.AcquireAsync("k", TimeSpan.FromHours(1), TestContext.CancellationToken);
+
+        Assert.AreEqual(LockingErrors.BackendFailed, result.Error?.Code);
+        Assert.AreEqual(1, backend.Attempts);
     }
 
     [TestMethod]

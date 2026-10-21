@@ -5,21 +5,17 @@ namespace LockingKit;
 /// keeps waiting fair across processes — a waiter that has waited a minute polls exactly as often as one that just
 /// arrived, so it is not starved by newcomers — and the jitter keeps contenders from retrying in lockstep.
 /// </summary>
-internal sealed class RetryBackoff
+internal sealed class RetryBackoff(TimeSpan min, TimeSpan max, Func<double>? random = null)
 {
-    private readonly long _min;
-    private readonly long _max;
-    private readonly Func<double> _random;
+    private readonly long _min = min > TimeSpan.Zero
+        ? min.Ticks
+        : throw new ArgumentOutOfRangeException(nameof(min), min, "The minimum delay must be greater than zero.");
 
-    public RetryBackoff(TimeSpan min, TimeSpan max, Func<double>? random = null)
-    {
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(min, TimeSpan.Zero);
-        ArgumentOutOfRangeException.ThrowIfLessThan(max, min);
+    private readonly long _max = max >= min
+        ? max.Ticks
+        : throw new ArgumentOutOfRangeException(nameof(max), max, "The maximum delay must be at least the minimum.");
 
-        _min = min.Ticks;
-        _max = max.Ticks;
-        _random = random ?? Random.Shared.NextDouble;
-    }
+    private readonly Func<double> _random = random ?? Random.Shared.NextDouble;
 
     /// <summary>The pause before attempt <paramref name="retry"/> + 1, where 0 is the first retry.</summary>
     /// <returns>A delay in [ceiling / 2, ceiling], ceiling = min(max, min × 2^retry).</returns>

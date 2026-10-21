@@ -14,8 +14,11 @@ namespace LockingKit;
 /// (<see cref="ErrorKind.Transient"/>), and a bad key is <see cref="LockingErrors.InvalidKey"/>.
 /// </para>
 /// <para>
-/// Misconfiguration — wrong credentials, a container or database that does not exist — throws the provider's
-/// exception, because no retry fixes it. Cancelling <c>ct</c> throws <see cref="OperationCanceledException"/>.
+/// Every other outcome is a result too, never an exception: misconfiguration — wrong credentials, a container or
+/// database that does not exist — is <see cref="LockingErrors.Misconfigured"/>, an unclassified backend failure is
+/// <see cref="LockingErrors.BackendFailed"/>, and a disposed provider is <see cref="LockingErrors.Disposed"/>. The one
+/// exception is cancellation: cancelling <c>ct</c> throws <see cref="OperationCanceledException"/>, as it does
+/// throughout .NET.
 /// </para>
 /// <para>
 /// Keys are any string of 1 to <see cref="DistributedLocks.MaxKeyLength"/> characters, compared ordinally

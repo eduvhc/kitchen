@@ -34,8 +34,15 @@ public interface ILockHandle : IAsyncDisposable
     long? FencingToken { get; }
 
     /// <summary>
-    /// Throws <see cref="LockLostException"/> when the lock has been lost, and <see cref="ObjectDisposedException"/>
-    /// after the handle was disposed. Call it before each step that must not run unprotected.
+    /// Checks the lock is still held before a step that must not run unprotected, as a result: success while held,
+    /// <see cref="LockingErrors.Lost"/> (<see cref="ResultingKit.ErrorKind.Conflict"/>) once it was lost or released.
+    /// </summary>
+    ResultingKit.Result EnsureHeld();
+
+    /// <summary>
+    /// The cancellation-style form of <see cref="EnsureHeld"/>, for work that already stops on
+    /// <see cref="OperationCanceledException"/>: throws <see cref="LockLostException"/> when the lock has been lost,
+    /// and <see cref="ObjectDisposedException"/> after the handle was disposed.
     /// </summary>
     void ThrowIfLost();
 }

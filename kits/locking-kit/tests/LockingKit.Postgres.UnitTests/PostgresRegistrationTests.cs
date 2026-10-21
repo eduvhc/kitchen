@@ -84,18 +84,19 @@ public sealed class PostgresRegistrationTests
     }
 
     [TestMethod]
-    [DataRow("28P01", false)]
-    [DataRow("3D000", false)]
-    [DataRow("42501", false)]
-    [DataRow("57P01", true)]
-    [DataRow("57P03", true)]
-    [DataRow("53300", true)]
-    [DataRow("08006", true)]
-    [DataRow("42601", false)]
-    public void Outages_are_transient_and_misconfiguration_throws(string sqlState, bool transient)
+    [DataRow("28P01", LockingErrors.Misconfigured)]
+    [DataRow("28000", LockingErrors.Misconfigured)]
+    [DataRow("3D000", LockingErrors.Misconfigured)]
+    [DataRow("42501", LockingErrors.Misconfigured)]
+    [DataRow("57P01", LockingErrors.Unavailable)]
+    [DataRow("57P03", LockingErrors.Unavailable)]
+    [DataRow("53300", LockingErrors.Unavailable)]
+    [DataRow("08006", LockingErrors.Unavailable)]
+    [DataRow("42601", null)]
+    public void Outages_are_transient_misconfiguration_is_classified_and_the_rest_is_left_to_the_engine(string sqlState, string? code)
     {
         var error = PostgresAdvisoryLockBackend.Translate(new PostgresException("failed", "FATAL", "FATAL", sqlState));
 
-        Assert.AreEqual(transient, error is { IsTransient: true }, sqlState);
+        Assert.AreEqual(code, error?.Code, sqlState);
     }
 }

@@ -72,6 +72,7 @@ public abstract class LockContract
         Assert.IsFalse(handle.IsLost);
         Assert.IsNull(handle.LossReason);
         Assert.ThrowsExactly<ObjectDisposedException>(handle.ThrowIfLost);
+        Assert.AreEqual(LockingErrors.Lost, handle.EnsureHeld().Error?.Code);
         await using var next = await Hold(locks, Key("k"));
     }
 
@@ -133,9 +134,9 @@ public abstract class LockContract
                 await using var handle = result.Value;
                 await checker.RunAsync($"p{p}c{c}r{round}", async () =>
                 {
-                    handle.ThrowIfLost();
+                    Assert.IsTrue(handle.EnsureHeld().IsSuccess);
                     await Task.Delay(Random.Shared.Next(1, 15), Ct);
-                    handle.ThrowIfLost();
+                    Assert.IsTrue(handle.EnsureHeld().IsSuccess);
                 });
             }
         }, Ct))).ToArray();

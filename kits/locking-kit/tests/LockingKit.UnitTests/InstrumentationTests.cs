@@ -103,7 +103,7 @@ public sealed class InstrumentationTests
     }
 
     [TestMethod]
-    public async Task An_exception_is_recorded_by_type_without_its_message_and_rethrown()
+    public async Task An_unclassified_exception_becomes_a_failure_result_recorded_by_code_without_its_message()
     {
         var (locks, meters, backend) = Build();
         await using var _ = locks;
@@ -111,13 +111,16 @@ public sealed class InstrumentationTests
         using var spans = new SpanRecorder();
         using var acquires = Collector<long>(meters, LockingKitMetrics.AcquiresName);
 
-        await Assert.ThrowsExactlyAsync<UnauthorizedAccessException>(() => locks.TryAcquireAsync(SecretKey, TestContext.CancellationToken));
+        var result = await locks.TryAcquireAsync(SecretKey, TestContext.CancellationToken);
 
+        Assert.AreEqual(LockingErrors.BackendFailed, result.Error?.Code);
         var span = spans.Single();
         Assert.AreEqual(ActivityStatusCode.Error, span.Status);
-        Assert.AreEqual("System.UnauthorizedAccessException", span.GetTagItem("error.type"));
+        Assert.AreEqual(LockingErrors.BackendFailed, span.StatusDescription);
+        Assert.AreEqual(LockingErrors.BackendFailed, span.GetTagItem("error.type"));
+        Assert.AreEqual("failure", span.GetTagItem("lockingkit.error.kind"));
         Assert.IsEmpty(span.Events, "Exception events carry messages, which can carry the key.");
-        Assert.AreEqual("System.UnauthorizedAccessException", acquires.GetMeasurementSnapshot().Single().Tags["error.type"]);
+        Assert.AreEqual(LockingErrors.BackendFailed, acquires.GetMeasurementSnapshot().Single().Tags["error.type"]);
     }
 
     [TestMethod]

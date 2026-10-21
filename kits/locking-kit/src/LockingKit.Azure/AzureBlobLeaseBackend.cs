@@ -8,29 +8,16 @@ using ResultingKit;
 namespace LockingKit.Azure;
 
 /// <summary>Locks as leases on guard blobs in one Azure Blob Storage container.</summary>
-internal sealed class AzureBlobLeaseBackend : ILockBackend
+internal sealed class AzureBlobLeaseBackend(BlobContainerClient container, string prefix, TimeSpan leaseDuration, bool fencingTokens)
+    : ILockBackend
 {
     /// <summary>The metadata entry that carries the last fencing token issued for a guard.</summary>
     internal const string FenceMetadataName = "lockingkit_fence";
 
-    private readonly BlobContainerClient _container;
-    private readonly string _prefix;
-    private readonly TimeSpan _duration;
-    private readonly bool _fencing;
+    private readonly BlobContainerClient _container = container ?? throw new ArgumentNullException(nameof(container));
+    private readonly string _prefix = prefix ?? throw new ArgumentNullException(nameof(prefix));
 
-    public AzureBlobLeaseBackend(BlobContainerClient container, string prefix, TimeSpan leaseDuration, bool fencingTokens)
-    {
-        ArgumentNullException.ThrowIfNull(container);
-        ArgumentNullException.ThrowIfNull(prefix);
-
-        _container = container;
-        _prefix = prefix;
-        _duration = leaseDuration;
-        _fencing = fencingTokens;
-        Timing = LeaseTiming.Expiring(leaseDuration);
-    }
-
-    public LeaseTiming Timing { get; }
+    public LeaseTiming Timing { get; } = LeaseTiming.Expiring(leaseDuration);
 
     public async Task<ILockLease?> TryAcquireAsync(string key, CancellationToken ct)
     {
@@ -44,7 +31,7 @@ internal sealed class AzureBlobLeaseBackend : ILockBackend
 
         var held = new HeldBlobLease(blob, lease);
 
-        if (!_fencing)
+        if (!fencingTokens)
         {
             return held;
         }
@@ -79,7 +66,11 @@ internal sealed class AzureBlobLeaseBackend : ILockBackend
             : DistributedLock.TranslateTransportException(exception.InnerException) ?? LockingErrors.BackendUnavailable(exception.Message),
         408 or 429 or >= 500 => LockingErrors.BackendUnavailable(exception.ErrorCode ?? $"{exception.Status}"),
 
-        // Wrong credentials, a missing container, a denied permission: misconfiguration, so it throws.
+        // Wrong credentials, a denied permission, a missing container: no retry fixes these.
+        401 or 403 => LockingErrors.Misconfiguration(exception.ErrorCode ?? $"{exception.Status}"),
+        404 when exception.ErrorCode is "ContainerNotFound" => LockingErrors.Misconfiguration("ContainerNotFound"),
+
+        // Anything else is reported by the engine as locking.backend_failed.
         _ => null,
     };
 
@@ -90,7 +81,7 @@ internal sealed class AzureBlobLeaseBackend : ILockBackend
     {
         try
         {
-            await lease.AcquireAsync(_duration, cancellationToken: ct).ConfigureAwait(false);
+            await lease.AcquireAsync(leaseDuration, cancellationToken: ct).ConfigureAwait(false);
             return true;
         }
         catch (RequestFailedException ex) when (IsLeaseHeldElsewhere(ex))
@@ -106,7 +97,7 @@ internal sealed class AzureBlobLeaseBackend : ILockBackend
 
         try
         {
-            await lease.AcquireAsync(_duration, cancellationToken: ct).ConfigureAwait(false);
+            await lease.AcquireAsync(leaseDuration, cancellationToken: ct).ConfigureAwait(false);
             return true;
         }
         catch (RequestFailedException ex) when (IsLeaseHeldElsewhere(ex))
