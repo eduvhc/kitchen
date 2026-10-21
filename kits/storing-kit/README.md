@@ -18,7 +18,7 @@ var link = await store.GetReadUrlAsync($"invoices/{id}.pdf", TimeSpan.FromMinute
 
 | Package | Contents |
 | --- | --- |
-| `StoringKit` | `IObjectStore`, the `ObjectStore` base for providers, errors, registration, traces and metrics. No cloud SDK. |
+| `StoringKit` | `IObjectStore`, JSON document helpers, the `ObjectStore` base for providers, errors, registration, traces and metrics. No cloud SDK. |
 | `StoringKit.Azure` | Azure Blob Storage, on `Azure.Storage.Blobs` |
 | `StoringKit.S3` | AWS S3 and S3-compatible stores (Cloudflare R2, MinIO), on `AWSSDK.S3` |
 
@@ -55,6 +55,7 @@ Expected failures come back as a failed `Result` carrying a ResultingKit `Error`
 | `storing.invalid_argument` | `Validation` | Content type, MD5 format, page size or URL lifetime out of range |
 | `storing.checksum_mismatch` | `Validation` | The service received bytes that do not match the MD5 |
 | `storing.too_large` | `Validation` | Bigger than the provider takes in one write |
+| `storing.invalid_document` | `Validation` | A stored object is not valid JSON for the type read, or a value cannot be serialized as JSON |
 | `storing.throttled` | `Transient` | 429, S3 `SlowDown`, Azure `ServerBusy` |
 | `storing.unavailable` | `Transient` | 5xx, connection failures |
 | `storing.timeout` | `Transient` | Request timeouts |
@@ -68,6 +69,60 @@ A misconfigured store **throws** the SDK's exception instead — wrong credentia
 `WriteCondition.IfNotExists` (`If-None-Match: *`) and `WriteCondition.IfMatch(etag)` (`If-Match`) are checked atomically by the service, on every provider: of any number of concurrent create-only writes to one key, exactly one succeeds. They are what idempotent writes are built on — derive the key from the operation's identity, write create-only, and treat `storing.already_exists` as "already done".
 
 ETags are opaque; pass back exactly what a `PutReceipt` or `StoredObject` gave you. Deletes are unconditional: R2 documents no conditional headers on `DeleteObject`.
+
+### JSON documents
+
+`GetFromJsonAsync`, `PutAsJsonAsync` and `ObjectContent.ReadFromJsonAsync` read and write objects as JSON, named and shaped after `System.Net.Http.Json`. They are extension methods in `StoringKit` built on `PutAsync` and `GetAsync`, so every provider gets them, they return the same errors, and they are traced as ordinary `put` and `get` spans with no content recorded.
+
+```csharp
+// Read: the value plus the properties from the same response, including the ETag
+Result<StoredDocument<Order>> read = await store.GetFromJsonAsync<Order>($"orders/{id}.json", ct: ct);
+if (read.IsFailure) return read.Error;                // storing.not_found, storing.invalid_document, transient, …
+var (order, properties) = read.Value;
+
+// Compare-and-swap: write back only if nobody else has since
+var put = await store.PutAsJsonAsync($"orders/{id}.json", order! with { Status = "shipped" }, new PutObjectOptions
+{
+    Condition = WriteCondition.IfMatch(read.Value.ETag),
+});
+
+// Create-only
+await store.PutAsJsonAsync($"orders/{id}.json", order, new PutObjectOptions { Condition = WriteCondition.IfNotExists });
+
+// Source generation: trim- and AOT-safe
+await store.PutAsJsonAsync(key, order, AppJsonContext.Default.Order);
+var typed = await store.GetFromJsonAsync(key, AppJsonContext.Default.Order);
+
+// Already holding an open object
+await using var content = (await store.GetAsync(key)).Value;
+Result<Order?> o = await content.ReadFromJsonAsync<Order>();
+```
+
+- **Serializer options** default to `JsonSerializerDefaults.Web` (camelCase, case-insensitive reads), as `HttpClient`'s helpers do. Pass `jsonOptions`, or a `JsonTypeInfo<T>` from a `JsonSerializerContext`. The reflection overloads are marked `RequiresUnreferencedCode` and `RequiresDynamicCode`.
+- **Writes** serialize into a seekable in-memory buffer, never a string, so the end-to-end `Content-MD5` check still applies and the S3 provider skips its temporary file. The content type is `application/json` unless `PutObjectOptions.ContentType` says otherwise. The options you pass are not changed.
+- **Metadata is not carried over.** A put writes exactly the metadata it is given, like `PutAsync`. To keep it across a read-modify-write, copy `properties.Metadata` into the new options.
+- **Reads** deserialize straight from the response stream and dispose it. The ETag comes from the same response as the bytes, so it is always the version you read. A connection lost mid-read is a `Transient` error, like a failed request.
+- **Bad JSON is a result, not an exception.** A stored object that is not valid JSON for the type is `storing.invalid_document`, with the stream already released, so a journal-style reader can quarantine the record and move on. A value that cannot be serialized (a reference cycle, an unsupported type) is the same error on a put, and nothing is written. The JSON literal `null` reads as `default`, so `StoredDocument<T>.Value` is `T?`.
+
+There is no built-in update loop. A read-modify-write takes a few lines, and keeping it in your code keeps the retry policy yours:
+
+```csharp
+async Task<Result<PutReceipt>> ShipAsync(IObjectStore store, string key, CancellationToken ct)
+{
+    for (var attempt = 1; ; attempt++)
+    {
+        var read = await store.GetFromJsonAsync<Order>(key, ct: ct);
+        if (read.IsFailure) return read.Error;
+
+        var put = await store.PutAsJsonAsync(key, read.Value.Value! with { Status = "shipped" },
+            new PutObjectOptions { Condition = WriteCondition.IfMatch(read.Value.ETag) }, ct: ct);
+
+        // Someone else wrote first: re-read their version and apply the change again.
+        if (put.Error is { Code: StoringErrors.PreconditionFailed } && attempt < 5) continue;
+        return put;
+    }
+}
+```
 
 ### Checksums
 

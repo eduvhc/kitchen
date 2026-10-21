@@ -13,6 +13,12 @@ internal sealed class FakeObjectStore(Uri? publicBaseUrl = null, TimeProvider? t
 
     public List<(string Key, DateTimeOffset ExpiresOn)> SignedUrls { get; } = [];
 
+    /// <summary>Opens the stream a get returns over an object's bytes.</summary>
+    public Func<byte[], Stream> OpenRead { get; set; } = bytes => new MemoryStream(bytes);
+
+    /// <summary>Every stream a get has returned, to check they were disposed.</summary>
+    public List<Stream> Opened { get; } = [];
+
     /// <summary>Thrown from every core method when set.</summary>
     public Exception? Throw { get; set; }
 
@@ -27,6 +33,14 @@ internal sealed class FakeObjectStore(Uri? publicBaseUrl = null, TimeProvider? t
     {
         ThrowIfSet();
         Writes.Add(write);
+
+        if (write.Condition is { } condition
+            && (condition.IsCreateOnly
+                ? _objects.ContainsKey(write.Key)
+                : !_objects.TryGetValue(write.Key, out var current) || current.Properties.ETag != condition.IfMatchETag))
+        {
+            throw new ConditionNotMetException();
+        }
 
         using var buffer = new MemoryStream();
         await write.Content.CopyToAsync(buffer, ct);
@@ -50,7 +64,9 @@ internal sealed class FakeObjectStore(Uri? publicBaseUrl = null, TimeProvider? t
     {
         ThrowIfSet();
         var (bytes, properties) = _objects[key];
-        return Task.FromResult(new ObjectContent(properties, new MemoryStream(bytes)));
+        var stream = OpenRead(bytes);
+        Opened.Add(stream);
+        return Task.FromResult(new ObjectContent(properties, stream));
     }
 
     protected override Task<StoredObject> GetPropertiesCoreAsync(string key, CancellationToken ct)
@@ -93,7 +109,12 @@ internal sealed class FakeObjectStore(Uri? publicBaseUrl = null, TimeProvider? t
     }
 
     protected override Error? TranslateException(Exception exception, ObjectStoreOperation operation, string key, WriteCondition? condition) =>
-        exception is KeyNotFoundException ? StoringErrors.MissingObject(key) : Translator(exception);
+        exception switch
+        {
+            KeyNotFoundException => StoringErrors.MissingObject(key),
+            ConditionNotMetException => StoringErrors.ConditionNotMet(key, condition),
+            _ => Translator(exception),
+        };
 
     private void ThrowIfSet()
     {
@@ -102,4 +123,6 @@ internal sealed class FakeObjectStore(Uri? publicBaseUrl = null, TimeProvider? t
             throw Throw;
         }
     }
+
+    private sealed class ConditionNotMetException : Exception;
 }

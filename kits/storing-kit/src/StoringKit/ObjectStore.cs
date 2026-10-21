@@ -15,7 +15,9 @@ namespace StoringKit;
 /// decides which exceptions are expected outcomes; anything it returns <see langword="null"/> for propagates.
 /// Cancellation requested by the caller always propagates as <see cref="OperationCanceledException"/>.
 /// </remarks>
-public abstract class ObjectStore : IObjectStore
+/// <param name="publicBaseUrl">The store's <see cref="ObjectStoreOptions.PublicBaseUrl"/>, if it is public.</param>
+/// <param name="timeProvider">The clock read URLs expire against. Defaults to <see cref="TimeProvider.System"/>.</param>
+public abstract class ObjectStore(Uri? publicBaseUrl, TimeProvider? timeProvider = null) : IObjectStore
 {
     /// <summary>The longest key, in UTF-8 bytes, that every provider accepts.</summary>
     public const int MaxKeyBytes = 1024;
@@ -29,33 +31,13 @@ public abstract class ObjectStore : IObjectStore
     /// <summary>The content type stored when <see cref="PutObjectOptions.ContentType"/> is not set.</summary>
     public const string DefaultContentType = "application/octet-stream";
 
-    private readonly Uri? _publicBaseUrl;
-
-    /// <summary>Initializes the base.</summary>
-    /// <param name="publicBaseUrl">The store's <see cref="ObjectStoreOptions.PublicBaseUrl"/>, if it is public.</param>
-    /// <param name="timeProvider">The clock read URLs expire against. Defaults to <see cref="TimeProvider.System"/>.</param>
-    protected ObjectStore(Uri? publicBaseUrl, TimeProvider? timeProvider = null)
-    {
-        if (publicBaseUrl is not null)
-        {
-            if (!publicBaseUrl.IsAbsoluteUri)
-            {
-                throw new ArgumentException("The public base URL must be absolute.", nameof(publicBaseUrl));
-            }
-
-            // Without the trailing slash, combining would replace the last path segment.
-            var text = publicBaseUrl.AbsoluteUri;
-            _publicBaseUrl = text.EndsWith('/') ? publicBaseUrl : new Uri(text + "/");
-        }
-
-        TimeProvider = timeProvider ?? TimeProvider.System;
-    }
+    private readonly Uri? _publicBaseUrl = WithTrailingSlash(publicBaseUrl);
 
     /// <summary>The longest lifetime <see cref="GetReadUrlAsync"/> accepts: seven days, the SigV4 presigning limit.</summary>
     public static TimeSpan MaxReadUrlLifetime { get; } = TimeSpan.FromDays(7);
 
     /// <summary>The clock read URLs expire against.</summary>
-    protected TimeProvider TimeProvider { get; }
+    protected TimeProvider TimeProvider { get; } = timeProvider ?? TimeProvider.System;
 
     /// <inheritdoc />
     public async Task<Result<PutReceipt>> PutAsync(
@@ -326,6 +308,10 @@ public abstract class ObjectStore : IObjectStore
         _ => null,
     };
 
+    /// <summary>Classifies a failure while reading a stream <see cref="GetAsync"/> opened, after the provider has returned.</summary>
+    internal static Error? TranslateReadException(Exception exception, CancellationToken ct) =>
+        ct.IsCancellationRequested && exception is OperationCanceledException ? null : TranslateTransportException(exception);
+
     private Error? Translate(Exception exception, ObjectStoreOperation operation, string key, WriteCondition? condition, CancellationToken ct)
     {
         if (ct.IsCancellationRequested && exception is OperationCanceledException)
@@ -334,6 +320,23 @@ public abstract class ObjectStore : IObjectStore
         }
 
         return TranslateException(exception, operation, key, condition) ?? TranslateTransportException(exception);
+    }
+
+    private static Uri? WithTrailingSlash(Uri? publicBaseUrl)
+    {
+        if (publicBaseUrl is null)
+        {
+            return null;
+        }
+
+        if (!publicBaseUrl.IsAbsoluteUri)
+        {
+            throw new ArgumentException("The public base URL must be absolute.", nameof(publicBaseUrl));
+        }
+
+        // Without the trailing slash, combining would replace the last path segment.
+        var text = publicBaseUrl.AbsoluteUri;
+        return text.EndsWith('/') ? publicBaseUrl : new Uri(text + "/");
     }
 
     [SuppressMessage("Security", "CA5351:Do not use broken cryptographic algorithms",
