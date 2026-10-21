@@ -522,7 +522,8 @@ public sealed class GeneratorTests
 
         var trees = new[] { source, second }
             .Where(s => s is not null)
-            .Select((s, i) => CSharpSyntaxTree.ParseText(s!, parseOptions, path: $"Source{i}.cs"))
+            // LF whatever the checkout uses, so the interceptor's location data (a hash of the text) is the same everywhere.
+            .Select((s, i) => CSharpSyntaxTree.ParseText(s!.ReplaceLineEndings("\n"), parseOptions, path: $"Source{i}.cs"))
             .ToList();
 
         var compilation = CSharpCompilation.Create(
