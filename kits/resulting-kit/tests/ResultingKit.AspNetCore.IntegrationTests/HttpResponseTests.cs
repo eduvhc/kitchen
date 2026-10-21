@@ -30,6 +30,11 @@ public static class Orders
         ? Result.Success()
         : Error.Conflict("order.shipped", $"Order {id} has shipped."));
 
+    public static Result Rename(string name) => Error.Validation(
+        "order.invalid",
+        "name: Must be at most 3 characters long.",
+        new Dictionary<string, string[]> { ["name"] = ["Must be at most 3 characters long."] });
+
     public static Result Fail(ErrorKind kind) => new Error($"kind.{kind}", $"Failed as {kind}.", kind);
 
     public static int Status(Error error) => error.Code == "order.name_required" ? 422 : error.ToStatusCode();
@@ -49,6 +54,9 @@ public sealed class OrdersController : ControllerBase
 
     [HttpDelete("orders/{id:int}")]
     public Task<IActionResult> Delete(int id) => Orders.CancelAsync(id).ToActionResultAsync();
+
+    [HttpPut("orders/7/name")]
+    public IActionResult Rename([FromQuery] string name) => Orders.Rename(name).ToActionResult();
 
     [HttpGet("kinds/{kind}")]
     public IActionResult Kind(ErrorKind kind) => Orders.Fail(kind).ToActionResult();
@@ -86,6 +94,7 @@ public sealed class HttpResponseTests
         app.MapPost("/api/orders", (Order order) =>
             Orders.Create(order).ToHttpResult(o => TypedResults.Created($"/api/orders/{o.Id}", o), Orders.Status));
         app.MapDelete("/api/orders/{id:int}", (int id) => Orders.CancelAsync(id).ToHttpResultAsync());
+        app.MapPut("/api/orders/7/name", (string name) => Orders.Rename(name).ToHttpResult());
         app.MapGet("/api/kinds/{kind}", (ErrorKind kind) => Orders.Fail(kind).ToHttpResult());
 
         await app.StartAsync();
@@ -192,6 +201,19 @@ public sealed class HttpResponseTests
 
         var json = await AssertProblemAsync(response, HttpStatusCode.UnprocessableEntity, "order.name_required");
         Assert.AreEqual("Unprocessable Entity", json.GetProperty("title").GetString());
+    }
+
+    [TestMethod]
+    [DataRow("/api")]
+    [DataRow("/mvc")]
+    public async Task Field_errors_are_a_validation_problem(string root)
+    {
+        var response = await s_client.PutAsync(Path($"{root}/orders/7/name?name=Coffee"), null);
+
+        var json = await AssertProblemAsync(response, HttpStatusCode.BadRequest, "order.invalid");
+        Assert.AreEqual("One or more validation errors occurred.", json.GetProperty("title").GetString());
+        Assert.AreEqual("name: Must be at most 3 characters long.", json.GetProperty("detail").GetString());
+        Assert.AreEqual("Must be at most 3 characters long.", json.GetProperty("errors").GetProperty("name")[0].GetString());
     }
 
     [TestMethod]

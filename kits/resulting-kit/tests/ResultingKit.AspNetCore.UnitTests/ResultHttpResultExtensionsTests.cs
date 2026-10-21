@@ -194,4 +194,84 @@ public sealed class ResultHttpResultExtensionsTests
         await Assert.ThrowsExactlyAsync<ArgumentNullException>(() => Task.FromResult(Result.Success()).ToHttpResultAsync((Func<IResult>)null!));
         await Assert.ThrowsExactlyAsync<ArgumentNullException>(() => Task.FromResult(Result.Success(1)).ToHttpResultAsync((Func<int, IResult>)null!));
     }
+
+    private static readonly Error s_invalid = Error.Validation(
+        "order.invalid",
+        "name: Must not be blank. items[0].sku: Is required.",
+        new Dictionary<string, string[]> { ["name"] = ["Must not be blank."], ["items[0].sku"] = ["Is required.", "Must be 8 characters long."] });
+
+    private static readonly Error s_taken = Error.Conflict("user.email_taken", "email: Is taken.") with
+    {
+        FieldErrors = new Dictionary<string, string[]> { ["email"] = ["Is taken."] },
+    };
+
+    private static void AssertFieldErrors(JsonElement json)
+    {
+        var errors = json.GetProperty("errors");
+        Assert.AreEqual(2, errors.EnumerateObject().Count());
+        Assert.AreEqual("Must not be blank.", errors.GetProperty("name")[0].GetString());
+        Assert.AreEqual("Is required.", errors.GetProperty("items[0].sku")[0].GetString());
+        Assert.AreEqual("Must be 8 characters long.", errors.GetProperty("items[0].sku")[1].GetString());
+    }
+
+    [TestMethod]
+    public async Task Failure_with_field_errors_is_a_validation_problem()
+    {
+        foreach (var result in new[] { Result.Failure(s_invalid).ToHttpResult(), Result.Failure<Order>(s_invalid).ToHttpResult() })
+        {
+            Assert.IsInstanceOfType<Microsoft.AspNetCore.Http.HttpResults.ValidationProblem>(result);
+
+            var response = await ExecuteAsync(result);
+
+            Assert.AreEqual(400, response.Status);
+            Assert.AreEqual("application/problem+json", response.ContentType);
+            Assert.AreEqual(400, response.Json.GetProperty("status").GetInt32());
+            Assert.AreEqual("One or more validation errors occurred.", response.Json.GetProperty("title").GetString());
+            Assert.AreEqual("https://tools.ietf.org/html/rfc9110#section-15.5.1", response.Json.GetProperty("type").GetString());
+            Assert.AreEqual(s_invalid.Message, response.Json.GetProperty("detail").GetString());
+            Assert.AreEqual("order.invalid", response.Json.GetProperty("code").GetString());
+            AssertFieldErrors(response.Json);
+        }
+    }
+
+    [TestMethod]
+    public async Task Validation_problem_goes_through_the_problem_details_service()
+    {
+        var response = await ExecuteAsync(
+            Result.Failure(s_invalid).ToHttpResult(),
+            services => services.AddProblemDetails(o => o.CustomizeProblemDetails = c => c.ProblemDetails.Extensions["node"] = "a"));
+
+        Assert.IsFalse(string.IsNullOrEmpty(response.Json.GetProperty("traceId").GetString()));
+        Assert.AreEqual("a", response.Json.GetProperty("node").GetString());
+        Assert.AreEqual("order.invalid", response.Json.GetProperty("code").GetString());
+        AssertFieldErrors(response.Json);
+    }
+
+    [TestMethod]
+    public async Task Validation_problem_takes_the_status_override()
+    {
+        var response = await ExecuteAsync(
+            Result.Failure(s_invalid).ToHttpResult(_ => 422),
+            services => services.AddProblemDetails());
+
+        Assert.AreEqual(422, response.Status);
+        Assert.AreEqual("application/problem+json", response.ContentType);
+        Assert.AreEqual(422, response.Json.GetProperty("status").GetInt32());
+        Assert.AreEqual("One or more validation errors occurred.", response.Json.GetProperty("title").GetString());
+        Assert.AreEqual("https://tools.ietf.org/html/rfc4918#section-11.2", response.Json.GetProperty("type").GetString());
+        Assert.AreEqual(s_invalid.Message, response.Json.GetProperty("detail").GetString());
+        Assert.AreEqual("order.invalid", response.Json.GetProperty("code").GetString());
+        Assert.IsFalse(string.IsNullOrEmpty(response.Json.GetProperty("traceId").GetString()));
+        AssertFieldErrors(response.Json);
+    }
+
+    [TestMethod]
+    public async Task Field_errors_on_another_kind_keep_its_status()
+    {
+        var response = await ExecuteAsync(Result.Failure(s_taken).ToHttpResult());
+
+        Assert.AreEqual(409, response.Status);
+        Assert.AreEqual("user.email_taken", response.Json.GetProperty("code").GetString());
+        Assert.AreEqual("Is taken.", response.Json.GetProperty("errors").GetProperty("email")[0].GetString());
+    }
 }
