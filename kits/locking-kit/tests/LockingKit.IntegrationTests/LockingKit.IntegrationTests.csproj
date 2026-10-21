@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="MSTest" />
+    <PackageReference Include="Testcontainers.Azurite" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <ProjectReference Include="../../../testing-kit/src/TestingKit/TestingKit.csproj" />
+    <ProjectReference Include="../../../testing-kit/src/TestingKit.Azurite/TestingKit.Azurite.csproj" />
+    <ProjectReference Include="../../../testing-kit/src/TestingKit.Postgres/TestingKit.Postgres.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/LockingKit.Azure/LockingKit.Azure.csproj" />
+    <ProjectReference Include="../../src/LockingKit.Postgres/LockingKit.Postgres.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
+  </ItemGroup>
+
+</Project>
