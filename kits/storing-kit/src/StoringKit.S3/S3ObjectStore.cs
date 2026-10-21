@@ -10,7 +10,8 @@ using ResultingKit;
 namespace StoringKit.S3;
 
 /// <summary><see cref="IObjectStore"/> over one bucket of an S3-compatible store.</summary>
-internal sealed class S3ObjectStore : ObjectStore, IDisposable
+internal sealed class S3ObjectStore(IAmazonS3 client, S3StoreOptions options, TimeProvider timeProvider)
+    : ObjectStore(options.PublicBaseUrl, timeProvider), IDisposable
 {
     /// <summary>
     /// Where the MD5 is kept: S3 verifies <c>Content-MD5</c> on upload but does not return it. The hyphen keeps it
@@ -20,22 +21,12 @@ internal sealed class S3ObjectStore : ObjectStore, IDisposable
 
     private const string MetadataPrefix = "x-amz-meta-";
 
-    private readonly IAmazonS3 _client;
-    private readonly string _bucket;
-    private readonly bool _isAws;
-    private readonly bool _https;
-
-    public S3ObjectStore(IAmazonS3 client, S3StoreOptions options, TimeProvider timeProvider)
-        : base(options.PublicBaseUrl, timeProvider)
-    {
-        ArgumentNullException.ThrowIfNull(client);
-        ArgumentException.ThrowIfNullOrWhiteSpace(options.BucketName);
-
-        _client = client;
-        _bucket = options.BucketName;
-        _isAws = options.IsAwsEndpoint;
-        _https = options.ServiceUrl is null || options.ServiceUrl.Scheme == Uri.UriSchemeHttps;
-    }
+    private readonly IAmazonS3 _client = client ?? throw new ArgumentNullException(nameof(client));
+    private readonly string _bucket = string.IsNullOrWhiteSpace(options.BucketName)
+        ? throw new ArgumentException("A bucket name is required.", nameof(options))
+        : options.BucketName;
+    private readonly bool _isAws = options.IsAwsEndpoint;
+    private readonly bool _https = options.ServiceUrl is null || options.ServiceUrl.Scheme == Uri.UriSchemeHttps;
 
     public void Dispose() => _client.Dispose();
 

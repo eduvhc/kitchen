@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Azure blob lease provider for LockingKit, on Azure.Storage.Blobs: renewable leases on guard blobs, with optional fencing tokens.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Storage.Blobs" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../LockingKit/LockingKit.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="LockingKit.Azure.UnitTests" />
+    <InternalsVisibleTo Include="LockingKit.IntegrationTests" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Distributed locks as a contract: try or wait for a lock by key, automatic renewal, a token that fires when the lock is lost, fencing tokens, typed results and built-in tracing and metrics. Includes an in-memory provider.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../resulting-kit/src/ResultingKit/ResultingKit.csproj" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="LockingKit.Azure" />
+    <InternalsVisibleTo Include="LockingKit.Postgres" />
+    <InternalsVisibleTo Include="LockingKit.UnitTests" />
+    <InternalsVisibleTo Include="LockingKit.Azure.UnitTests" />
+    <InternalsVisibleTo Include="LockingKit.Postgres.UnitTests" />
+    <InternalsVisibleTo Include="LockingKit.IntegrationTests" />
+  </ItemGroup>
+
+</Project>

@@ -45,25 +45,15 @@ public sealed record PutReceipt
 }
 
 /// <summary>An open object: its properties and a stream over its bytes. Dispose it to release the connection.</summary>
-public sealed class ObjectContent : IAsyncDisposable, IDisposable
+/// <param name="properties">The object's properties as of the read.</param>
+/// <param name="content">The response stream; owned and disposed by this instance.</param>
+public sealed class ObjectContent(StoredObject properties, Stream content) : IAsyncDisposable, IDisposable
 {
-    /// <summary>Wraps an open download.</summary>
-    /// <param name="properties">The object's properties as of the read.</param>
-    /// <param name="content">The response stream; owned and disposed by this instance.</param>
-    public ObjectContent(StoredObject properties, Stream content)
-    {
-        ArgumentNullException.ThrowIfNull(properties);
-        ArgumentNullException.ThrowIfNull(content);
-
-        Properties = properties;
-        Content = content;
-    }
-
     /// <summary>The object's properties, read in the same request as the content.</summary>
-    public StoredObject Properties { get; }
+    public StoredObject Properties { get; } = properties ?? throw new ArgumentNullException(nameof(properties));
 
     /// <summary>The object's bytes, streamed from the provider. Read it once.</summary>
-    public Stream Content { get; }
+    public Stream Content { get; } = content ?? throw new ArgumentNullException(nameof(content));
 
     /// <inheritdoc />
     public void Dispose() => Content.Dispose();

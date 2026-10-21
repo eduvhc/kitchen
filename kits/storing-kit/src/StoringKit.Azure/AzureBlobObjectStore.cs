@@ -8,37 +8,28 @@ using ResultingKit;
 namespace StoringKit.Azure;
 
 /// <summary><see cref="IObjectStore"/> over one Azure Blob Storage container, as block blobs.</summary>
-internal sealed class AzureBlobObjectStore : ObjectStore, IDisposable
+/// <param name="service">The blob service client.</param>
+/// <param name="containerName">The container every key lives in.</param>
+/// <param name="canUseDelegationKey">Whether <paramref name="service"/> holds a token credential that can request user delegation keys.</param>
+/// <param name="publicBaseUrl">The public URL of the container, if it is public.</param>
+/// <param name="timeProvider">The clock read URLs expire against.</param>
+internal sealed class AzureBlobObjectStore(
+    BlobServiceClient service,
+    string containerName,
+    bool canUseDelegationKey,
+    Uri? publicBaseUrl,
+    TimeProvider timeProvider)
+    : ObjectStore(publicBaseUrl, timeProvider), IDisposable
 {
     // User delegation keys live at most seven days; refresh a little before the end so signing never races expiry.
     private static readonly TimeSpan DelegationKeyLifetime = TimeSpan.FromDays(7) - TimeSpan.FromMinutes(5);
 
-    private readonly BlobContainerClient _container;
-    private readonly BlobServiceClient _service;
+    private readonly BlobServiceClient _service = service ?? throw new ArgumentNullException(nameof(service));
+    private readonly BlobContainerClient _container = service.GetBlobContainerClient(
+        string.IsNullOrWhiteSpace(containerName) ? throw new ArgumentException("A container name is required.", nameof(containerName)) : containerName);
     private readonly SemaphoreSlim _delegationKeyLock = new(1, 1);
-    private readonly bool _canUseDelegationKey;
+    private readonly bool _canUseDelegationKey = canUseDelegationKey;
     private UserDelegationKey? _delegationKey;
-
-    /// <param name="service">The blob service client.</param>
-    /// <param name="containerName">The container every key lives in.</param>
-    /// <param name="canUseDelegationKey">Whether <paramref name="service"/> holds a token credential that can request user delegation keys.</param>
-    /// <param name="publicBaseUrl">The public URL of the container, if it is public.</param>
-    /// <param name="timeProvider">The clock read URLs expire against.</param>
-    public AzureBlobObjectStore(
-        BlobServiceClient service,
-        string containerName,
-        bool canUseDelegationKey,
-        Uri? publicBaseUrl,
-        TimeProvider timeProvider)
-        : base(publicBaseUrl, timeProvider)
-    {
-        ArgumentNullException.ThrowIfNull(service);
-        ArgumentException.ThrowIfNullOrWhiteSpace(containerName);
-
-        _service = service;
-        _canUseDelegationKey = canUseDelegationKey;
-        _container = service.GetBlobContainerClient(containerName);
-    }
 
     public void Dispose() => _delegationKeyLock.Dispose();
 

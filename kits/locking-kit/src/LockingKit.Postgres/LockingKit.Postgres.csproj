@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>PostgreSQL provider for LockingKit, on Npgsql: session-level advisory locks held on a dedicated connection, with optional fencing tokens.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../LockingKit/LockingKit.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="LockingKit.Postgres.UnitTests" />
+    <InternalsVisibleTo Include="LockingKit.IntegrationTests" />
+  </ItemGroup>
+
+</Project>

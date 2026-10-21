@@ -348,6 +348,97 @@ public abstract class ObjectStoreContract
         Assert.AreEqual(key, page.Value.Objects.Single().Key);
     }
 
+    [TestMethod]
+    public async Task A_json_document_round_trips_with_the_etag_of_its_put()
+    {
+        var key = Key("docs/order.json");
+        var options = new PutObjectOptions();
+        options.Metadata["kind"] = "order";
+
+        var put = await Store.PutAsJsonAsync(key, new Counter("orders", 41), options, ct: Ct);
+        var get = await Store.GetFromJsonAsync<Counter>(key, ct: Ct);
+
+        Assert.IsTrue(put.IsSuccess, put.ToString());
+        Assert.IsTrue(get.IsSuccess, get.ToString());
+        Assert.AreEqual(new Counter("orders", 41), get.Value.Value);
+        Assert.AreEqual(put.Value.ETag, get.Value.ETag);
+        Assert.AreEqual("application/json", get.Value.Properties.ContentType);
+        Assert.AreEqual(put.Value.ContentMd5, get.Value.Properties.ContentMd5);
+        Assert.AreEqual("order", get.Value.Properties.Metadata["kind"]);
+        Assert.AreEqual("""{"name":"orders","value":41}""", await ReadTextAsync(key));
+    }
+
+    [TestMethod]
+    public async Task A_missing_json_document_is_not_found()
+    {
+        var get = await Store.GetFromJsonAsync<Counter>(Key("docs/missing.json"), ct: Ct);
+
+        AssertError(get, ErrorKind.NotFound, StoringErrors.NotFound);
+    }
+
+    [TestMethod]
+    public async Task Exactly_one_of_many_concurrent_create_only_json_puts_wins()
+    {
+        var key = Key("docs/race.json");
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 8).Select(i =>
+            Store.PutAsJsonAsync(key, new Counter($"writer {i}", i), new PutObjectOptions { Condition = WriteCondition.IfNotExists }, ct: Ct)));
+
+        Assert.AreEqual(1, results.Count(r => r.IsSuccess), string.Join(", ", results.Select(r => r.ToString())));
+        foreach (var loser in results.Where(r => r.IsFailure))
+        {
+            AssertError(loser, ErrorKind.Conflict, StoringErrors.AlreadyExists);
+        }
+
+        var winner = results.Single(r => r.IsSuccess).Value;
+        var stored = (await Store.GetFromJsonAsync<Counter>(key, ct: Ct)).Value;
+        Assert.AreEqual(winner.ETag, stored.ETag);
+        Assert.AreEqual($"writer {stored.Value!.Value}", stored.Value.Name);
+    }
+
+    [TestMethod]
+    public async Task Of_two_writers_holding_the_same_etag_only_the_first_wins()
+    {
+        var key = Key("docs/cas.json");
+        await Store.PutAsJsonAsync(key, new Counter("hits", 0), ct: Ct);
+        var alice = (await Store.GetFromJsonAsync<Counter>(key, ct: Ct)).Value;
+        var bob = (await Store.GetFromJsonAsync<Counter>(key, ct: Ct)).Value;
+
+        var first = await Store.PutAsJsonAsync(key, alice.Value! with { Value = 1 }, new PutObjectOptions { Condition = WriteCondition.IfMatch(alice.ETag) }, ct: Ct);
+        var second = await Store.PutAsJsonAsync(key, bob.Value! with { Value = 100 }, new PutObjectOptions { Condition = WriteCondition.IfMatch(bob.ETag) }, ct: Ct);
+
+        Assert.IsTrue(first.IsSuccess, first.ToString());
+        AssertError(second, ErrorKind.Conflict, StoringErrors.PreconditionFailed);
+        var stored = (await Store.GetFromJsonAsync<Counter>(key, ct: Ct)).Value;
+        Assert.AreEqual(1, stored.Value!.Value);
+        Assert.AreEqual(first.Value.ETag, stored.ETag);
+    }
+
+    [TestMethod]
+    public async Task Concurrent_read_modify_write_loops_lose_no_update()
+    {
+        var key = Key("docs/counter.json");
+        await Store.PutAsJsonAsync(key, new Counter("hits", 0), ct: Ct);
+
+        await Task.WhenAll(Enumerable.Range(0, 6).Select(_ => IncrementAsync(key)));
+
+        Assert.AreEqual(6, (await Store.GetFromJsonAsync<Counter>(key, ct: Ct)).Value.Value!.Value);
+    }
+
+    [TestMethod]
+    public async Task A_malformed_json_document_is_an_invalid_document_and_releases_the_connection()
+    {
+        var key = Key("docs/broken.json");
+        await Store.PutAsync(key, Text("""{"name":"orders","value":"""), new PutObjectOptions { ContentType = "application/json" }, Ct);
+
+        for (var i = 0; i < 3; i++)
+        {
+            AssertError(await Store.GetFromJsonAsync<Counter>(key, ct: Ct), ErrorKind.Validation, StoringErrors.InvalidDocument);
+        }
+
+        Assert.IsTrue((await Store.ExistsAsync(key, Ct)).Value);
+    }
+
     private static void AssertError(Result result, ErrorKind kind, string code)
     {
         Assert.IsTrue(result.IsFailure, $"Expected {code}, got {result}");
@@ -368,6 +459,27 @@ public abstract class ObjectStoreContract
     }
 
     private string Key(string name) => _prefix + name;
+
+    // The read-modify-write loop the README documents.
+    private async Task IncrementAsync(string key)
+    {
+        for (var attempt = 0; attempt < 50; attempt++)
+        {
+            var read = await Store.GetFromJsonAsync<Counter>(key, ct: Ct);
+            Assert.IsTrue(read.IsSuccess, read.ToString());
+
+            var write = await Store.PutAsJsonAsync(key, read.Value.Value! with { Value = read.Value.Value.Value + 1 },
+                new PutObjectOptions { Condition = WriteCondition.IfMatch(read.Value.ETag) }, ct: Ct);
+
+            if (write.Error is not { Code: StoringErrors.PreconditionFailed })
+            {
+                Assert.IsTrue(write.IsSuccess, write.ToString());
+                return;
+            }
+        }
+
+        Assert.Fail("The increment kept losing the race.");
+    }
 
     private async Task<string> ReadTextAsync(string key)
     {
@@ -427,3 +539,5 @@ public sealed class S3StoreContractTests : ObjectStoreContract
 {
     protected override IServiceProvider Services => TestHost.S3Services;
 }
+
+public sealed record Counter(string Name, int Value);
