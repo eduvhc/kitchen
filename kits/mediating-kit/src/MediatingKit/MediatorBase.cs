@@ -83,6 +83,65 @@ public abstract class MediatorBase : IMediator
         return new RequestPipeline<THandler, TRequest, TResponse>(handler, invoke, first, next);
     }
 
+    /// <summary>
+    /// Builds the pipeline for a request type only if a behavior applies to it, and otherwise returns
+    /// <see langword="null"/>, remembering for the whole container that none does.
+    /// </summary>
+    /// <typeparam name="THandler">The handler's type.</typeparam>
+    /// <typeparam name="TRequest">The request type the handler declares.</typeparam>
+    /// <typeparam name="TResponse">The response type.</typeparam>
+    /// <param name="handler">The handler.</param>
+    /// <param name="request">The request type's index in the generated mediator.</param>
+    /// <returns>The pipeline, or <see langword="null"/> when the handler is called directly.</returns>
+    protected RequestPipeline<THandler, TRequest, TResponse>? CreatePipelineIfAny<THandler, TRequest, TResponse>(THandler handler, int request)
+        where THandler : class, IRequestHandler<TRequest, TResponse>
+        where TRequest : IRequest<TResponse>
+    {
+        if (_runtime.IsBehaviorless(request))
+        {
+            return null;
+        }
+
+        var pipeline = CreatePipeline<THandler, TRequest, TResponse>(handler);
+
+        if (pipeline.First is null)
+        {
+            _runtime.MarkBehaviorless(request);
+            return null;
+        }
+
+        return pipeline;
+    }
+
+    /// <summary>
+    /// Builds the pipeline for a request type without a response only if a behavior applies to it. See
+    /// <see cref="CreatePipelineIfAny{THandler, TRequest, TResponse}"/>.
+    /// </summary>
+    /// <typeparam name="THandler">The handler's type.</typeparam>
+    /// <typeparam name="TRequest">The request type the handler declares.</typeparam>
+    /// <param name="handler">The handler.</param>
+    /// <param name="request">The request type's index in the generated mediator.</param>
+    /// <returns>The pipeline, or <see langword="null"/> when the handler is called directly.</returns>
+    protected VoidRequestPipeline<THandler, TRequest>? CreateVoidPipelineIfAny<THandler, TRequest>(THandler handler, int request)
+        where THandler : class, IRequestHandler<TRequest>
+        where TRequest : IRequest
+    {
+        if (_runtime.IsBehaviorless(request))
+        {
+            return null;
+        }
+
+        var pipeline = CreateVoidPipeline<THandler, TRequest>(handler);
+
+        if (pipeline.First is null)
+        {
+            _runtime.MarkBehaviorless(request);
+            return null;
+        }
+
+        return pipeline;
+    }
+
     /// <summary>Resolves the behaviors for a request type without a response and chains them in front of its handler.</summary>
     /// <typeparam name="THandler">The handler's type, kept so the no-behavior path calls it directly.</typeparam>
     /// <typeparam name="TRequest">The request type the handler declares.</typeparam>

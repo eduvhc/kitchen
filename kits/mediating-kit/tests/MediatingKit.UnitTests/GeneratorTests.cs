@@ -51,8 +51,9 @@ public sealed class GeneratorTests
         StringAssert.Contains(mediator, "[global::System.Runtime.CompilerServices.InterceptsLocation(1, ");
         StringAssert.Contains(mediator, "file sealed class GeneratedMediator : global::MediatingKit.MediatorBase");
         StringAssert.Contains(mediator, "if (request is global::DeleteFile r0)\n");
-        StringAssert.Contains(mediator, "private global::MediatingKit.RequestPipeline<global::DeleteFileHandler, global::DeleteFile, string>? _request0;");
-        StringAssert.Contains(mediator, "return ((global::MediatingKit.IRequestHandler<global::DeleteFile, string>)pipeline.Handler).Handle(request, ct);");
+        StringAssert.Contains(mediator, "private global::DeleteFileHandler? _handler0;");
+        StringAssert.Contains(mediator, "private global::MediatingKit.RequestPipeline<global::DeleteFileHandler, global::DeleteFile, string>? _pipeline0;");
+        StringAssert.Contains(mediator, "return ((global::MediatingKit.IRequestHandler<global::DeleteFile, string>)handler).Handle(request, ct);");
         StringAssert.Contains(mediator, "TryAdd(services, new global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor(typeof(global::DeleteFileHandler), typeof(global::DeleteFileHandler), lifetime));");
         Assert.DoesNotContain("typeof(TResponse)", mediator, "a sealed request pins its response, so no runtime check is needed");
     }

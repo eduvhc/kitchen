@@ -105,7 +105,8 @@ public sealed class RegistrationTests
             configure: null,
             typeof(string),
             _ => throw new NotSupportedException(),
-            (_, _) => { }));
+            (_, _) => { },
+            requestTypes: 0));
 
         StringAssert.Contains(error.Message, "MediatingKit.UnitTests");
         StringAssert.Contains(error.Message, "System.Private.CoreLib");

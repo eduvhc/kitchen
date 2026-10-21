@@ -14,6 +14,7 @@ public static class MediatorRegistration
     /// <param name="mediatorType">The generated mediator's type.</param>
     /// <param name="factory">Creates the generated mediator.</param>
     /// <param name="registerHandlers">Registers every handler the generated mediator dispatches to.</param>
+    /// <param name="requestTypes">How many request types the generated mediator dispatches, for its per-container cache.</param>
     /// <returns><paramref name="services"/>, for chaining.</returns>
     /// <exception cref="InvalidOperationException">A different generated mediator is already registered.</exception>
     public static IServiceCollection Register(
@@ -21,12 +22,14 @@ public static class MediatorRegistration
         Action<MediatorOptions>? configure,
         Type mediatorType,
         Func<IServiceProvider, IMediator> factory,
-        Action<IServiceCollection, ServiceLifetime> registerHandlers)
+        Action<IServiceCollection, ServiceLifetime> registerHandlers,
+        int requestTypes)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(mediatorType);
         ArgumentNullException.ThrowIfNull(factory);
         ArgumentNullException.ThrowIfNull(registerHandlers);
+        ArgumentOutOfRangeException.ThrowIfNegative(requestTypes);
 
         var existing = services
             .Where(d => d.ServiceType == typeof(MediatorRegistrationMarker))
@@ -66,7 +69,7 @@ public static class MediatorRegistration
         services.AddMetrics();
         services.TryAddSingleton<MediatorTelemetry>();
         services.AddSingleton(new MediatorRegistrationMarker(mediatorType));
-        services.AddSingleton(sp => new MediatorRuntime(sp.GetRequiredService<MediatorTelemetry>(), publishing));
+        services.AddSingleton(sp => new MediatorRuntime(sp.GetRequiredService<MediatorTelemetry>(), publishing, requestTypes));
 
         registerHandlers(services, lifetime);
         options.RegisterBehaviors(services);
