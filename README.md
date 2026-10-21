@@ -11,13 +11,14 @@ A family of small, independent .NET packages. Each kit owns one concern, version
 | [MailingKit](kits/mailing-kit) | Email as a module: templates, SMTP or Resend, a record of what was sent | `MailingKit`, `.Smtp`, `.Resend` |
 | [ResultingKit](kits/resulting-kit) | Explicit success and failure; typed errors that say whether retrying helps | `ResultingKit`, `.AspNetCore` |
 | [StoringKit](kits/storing-kit) | Object storage behind one contract: Azure Blob Storage, AWS S3, Cloudflare R2, MinIO | `StoringKit`, `.Azure`, `.S3` |
+| [LockingKit](kits/locking-kit) | Distributed locks behind one contract: renewal, loss signalling and fencing tokens on Azure blob leases or PostgreSQL advisory locks | `LockingKit`, `.Azure`, `.Postgres` |
 | [ValidatingKit](kits/validating-kit) | Fluent, dependency-free validation that returns `Result`s with field-level errors; automatic request validation for ASP.NET Core | `ValidatingKit`, `.AspNetCore` |
 
 Each kit's own README documents its packages, and is what ships as the NuGet readme.
 
 ## The naming rule
 
-Every kit is `<Gerund>Kit` — the *-ing* form of what it does. Testing, Messaging, Mailing, Resulting, Storing, Validating, and later Authenticating, Billing, Scheduling, Caching.
+Every kit is `<Gerund>Kit` — the *-ing* form of what it does. Testing, Messaging, Mailing, Resulting, Storing, Validating, Locking, and later Authenticating, Billing, Scheduling, Caching.
 
 Sub-packages extend the root with a dot: `TestingKit.Postgres`, `MessagingKit.Outbox`, `MailingKit.Smtp`. **One package per external dependency**, so a host on Resend never restores MailKit, and a module that only needs contracts never restores EF Core.
 
@@ -25,7 +26,7 @@ Sub-packages extend the root with a dot: `TestingKit.Postgres`, `MessagingKit.Ou
 
 These are what stop a family of packages collapsing into one blob:
 
-- **Kits do not reference each other for convenience.** MailingKit depends on MessagingKit because an email *is* a message, and both depend on ResultingKit because their transport contracts return its `Result`, as StoringKit's store contract does, and ValidatingKit's whole output is a `Result` — real dependencies. Anything weaker gets wired by the host instead.
+- **Kits do not reference each other for convenience.** MailingKit depends on MessagingKit because an email *is* a message, and both depend on ResultingKit because their transport contracts return its `Result`, as StoringKit's store contract and LockingKit's lock contract do, and ValidatingKit's whole output is a `Result` — real dependencies. Anything weaker gets wired by the host instead.
 - **The host owns the `DbContext`.** Kits map their tables into it with `modelBuilder.AddX()`, so migrations live in the application's own history. No kit ships migrations.
 - **Abstractions ship separately.** A module referencing `MessagingKit.Abstractions` gets the contracts and the analyzer, not the EF Core machinery.
 - **No `Common`, no `Shared`, no `Utils`.** They become dumping grounds. If two kits need the same thing, it earns its own kit.
@@ -50,6 +51,7 @@ kitchen/
     resulting-kit/
     storing-kit/
     validating-kit/
+    locking-kit/
 ```
 
 Shared configuration lives once at the root. A kit's own `src/Directory.Build.props` adds only what is specific to it: its README and its version tag prefix.

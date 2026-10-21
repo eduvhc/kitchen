@@ -293,6 +293,10 @@ Every store registered through `AddAzureBlobStore`, `AddS3Store` or `AddObjectSt
 
 A get is timed until the response headers arrive, not until the caller finishes reading the stream. The histogram advises OpenTelemetry's bucket boundaries for seconds (5 ms to 10 s).
 
+## Locks
+
+StoringKit has no lease or lock API, by design. Conditional writes already make a journal safe with any number of writers: create entries with `IfNotExists` and complete them with `IfMatch`. When you need mutual exclusion ("only one worker rebuilds this index"), use [LockingKit](../locking-kit). `LockingKit.Azure` holds renewable leases on guard blobs, with a token that fires on loss and optional fencing tokens. `LockingKit.Postgres` does the same with advisory locks.
+
 ## Testing
 
 `StoringKit.IntegrationTests` runs one contract suite against Azurite (`TestingKit.Azurite`) and MinIO (`TestingKit.Minio`). Use the same fixtures for your own tests: point a store at the fixture's connection string or endpoint, and every behaviour above holds.
