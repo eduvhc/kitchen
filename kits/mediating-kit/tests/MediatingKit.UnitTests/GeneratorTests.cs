@@ -192,7 +192,7 @@ public sealed class GeneratorTests
             """, Composition);
 
         Assert.IsEmpty(run.Diagnostics);
-        StringAssert.Contains(run.Sources["MediatingKit.Mediator.g.cs"], "var handlers = _notification0 ??= [GetHandler<global::First>(), GetHandler<global::Second>()];");
+        StringAssert.Contains(run.Sources["MediatingKit.Mediator.g.cs"], "var set = _notification0 ??= new PublishSet0(GetHandler<global::First>(), GetHandler<global::Second>());");
     }
 
     [TestMethod]

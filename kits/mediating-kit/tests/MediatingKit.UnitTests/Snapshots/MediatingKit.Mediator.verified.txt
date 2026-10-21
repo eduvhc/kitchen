@@ -92,26 +92,60 @@ namespace MediatingKit.Generated
             return ThrowNoHandler<global::System.Collections.Generic.IAsyncEnumerable<TResponse>>(request);
         }
 
-        private global::MediatingKit.INotificationHandler<global::Files.FileDeleted>[]? _notification0;
-
-        private global::MediatingKit.INotificationHandler<global::MediatingKit.INotification>[]? _notification1;
-
         public override global::System.Threading.Tasks.ValueTask Publish<TNotification>(TNotification notification, global::System.Threading.CancellationToken ct = default)
         {
-            if (notification is global::Files.FileDeleted n0)
-            {
-                var handlers = _notification0 ??= [GetHandler<global::Files.Audit>(), GetHandler<global::Files.Everything>()];
-                return PublishToHandlers(handlers, n0, "publish FileDeleted", "Files.FileDeleted", ct);
-            }
-
-            if (notification is global::MediatingKit.INotification n1)
-            {
-                var handlers = _notification1 ??= [GetHandler<global::Files.Everything>()];
-                return PublishToHandlers(handlers, n1, "publish INotification", "MediatingKit.INotification", ct);
-            }
+            if (notification is global::Files.FileDeleted n0) return Publish0(n0, ct);
+            if (notification is global::MediatingKit.INotification n1) return Publish1(n1, ct);
 
             // A notification nobody handles is not an error.
             return notification is null ? ThrowNoHandler<global::System.Threading.Tasks.ValueTask>(null) : default;
+        }
+
+        private PublishSet0? _notification0;
+
+        private global::System.Threading.Tasks.ValueTask Publish0(global::Files.FileDeleted notification, global::System.Threading.CancellationToken ct)
+        {
+            var set = _notification0 ??= new PublishSet0(GetHandler<global::Files.Audit>(), GetHandler<global::Files.Everything>());
+            if (!PublishesInline) return PublishToHandlers(set.All, notification, "publish FileDeleted", "Files.FileDeleted", ct);
+            var pending = ((global::MediatingKit.INotificationHandler<global::Files.FileDeleted>)set.H0).Handle(notification, ct);
+            if (!pending.IsCompletedSuccessfully) return ContinuePublish(pending, set.All, 1, notification, ct);
+            pending.GetAwaiter().GetResult();
+            return ((global::MediatingKit.INotificationHandler<global::MediatingKit.INotification>)set.H1).Handle(notification, ct);
+        }
+
+        private sealed class PublishSet0
+        {
+            public readonly global::Files.Audit H0;
+            public readonly global::Files.Everything H1;
+            public readonly global::MediatingKit.INotificationHandler<global::Files.FileDeleted>[] All;
+
+            public PublishSet0(global::Files.Audit h0, global::Files.Everything h1)
+            {
+                H0 = h0;
+                H1 = h1;
+                All = [h0, h1];
+            }
+        }
+
+        private PublishSet1? _notification1;
+
+        private global::System.Threading.Tasks.ValueTask Publish1(global::MediatingKit.INotification notification, global::System.Threading.CancellationToken ct)
+        {
+            var set = _notification1 ??= new PublishSet1(GetHandler<global::Files.Everything>());
+            if (!PublishesInline) return PublishToHandlers(set.All, notification, "publish INotification", "MediatingKit.INotification", ct);
+            return ((global::MediatingKit.INotificationHandler<global::MediatingKit.INotification>)set.H0).Handle(notification, ct);
+        }
+
+        private sealed class PublishSet1
+        {
+            public readonly global::Files.Everything H0;
+            public readonly global::MediatingKit.INotificationHandler<global::MediatingKit.INotification>[] All;
+
+            public PublishSet1(global::Files.Everything h0)
+            {
+                H0 = h0;
+                All = [h0];
+            }
         }
     }
 }

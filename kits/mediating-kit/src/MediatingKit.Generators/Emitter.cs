@@ -354,30 +354,81 @@ internal static class Emitter
 
     private static void WritePublish(CodeWriter w, List<(HandlerInfo Case, List<HandlerInfo> Handlers)> notifications)
     {
-        for (var i = 0; i < notifications.Count; i++)
-        {
-            w.Line();
-            w.Line($"private global::MediatingKit.INotificationHandler<{notifications[i].Case.MessageType}>[]? _notification{i};");
-        }
-
         w.Line();
         w.Line("public override global::System.Threading.Tasks.ValueTask Publish<TNotification>(TNotification notification, global::System.Threading.CancellationToken ct = default)");
         w.Open();
 
         for (var i = 0; i < notifications.Count; i++)
         {
-            var (match, handlers) = notifications[i];
-
-            w.Line($"if (notification is {match.MessagePattern} n{i})");
-            w.Open();
-            w.Line($"var handlers = _notification{i} ??= [{string.Join(", ", handlers.Select(Resolve))}];");
-            w.Line($"return PublishToHandlers(handlers, n{i}, {Literal("publish " + match.MessageName)}, {Literal(match.MessageFullName)}, ct);");
-            w.Close();
-            w.Line();
+            w.Line($"if (notification is {notifications[i].Case.MessagePattern} n{i}) return Publish{i}(n{i}, ct);");
         }
 
+        w.Line();
         w.Line("// A notification nobody handles is not an error.");
         w.Line("return notification is null ? ThrowNoHandler<global::System.Threading.Tasks.ValueTask>(null) : default;");
+        w.Close();
+
+        for (var i = 0; i < notifications.Count; i++)
+        {
+            WritePublishCase(w, i, notifications[i].Case, notifications[i].Handlers);
+        }
+    }
+
+    /// <summary>
+    /// One notification type's handlers, resolved once into a holder with a typed field each, so a sequential publish
+    /// calls them one after another directly: no array walk, and no interface dispatch for a sealed handler.
+    /// </summary>
+    private static void WritePublishCase(CodeWriter w, int i, HandlerInfo match, List<HandlerInfo> handlers)
+    {
+        var set = $"PublishSet{i}";
+        var array = $"global::MediatingKit.INotificationHandler<{match.MessageType}>[]";
+        var holders = handlers.Select(h => h.ExportAccessor is null ? h.HandlerType : h.InterfaceType).ToList();
+
+        w.Line();
+        w.Line($"private {set}? _notification{i};");
+        w.Line();
+        w.Line($"private global::System.Threading.Tasks.ValueTask Publish{i}({match.MessageType} notification, global::System.Threading.CancellationToken ct)");
+        w.Open();
+        w.Line($"var set = _notification{i} ??= new {set}({string.Join(", ", handlers.Select(Resolve))});");
+        w.Line($"if (!PublishesInline) return PublishToHandlers(set.All, notification, {Literal("publish " + match.MessageName)}, {Literal(match.MessageFullName)}, ct);");
+
+        for (var j = 0; j < handlers.Count; j++)
+        {
+            var call = $"(({handlers[j].InterfaceType})set.H{j}).Handle(notification, ct)";
+
+            if (j == handlers.Count - 1)
+            {
+                w.Line($"return {call};");
+                break;
+            }
+
+            w.Line(j == 0 ? $"var pending = {call};" : $"pending = {call};");
+            w.Line($"if (!pending.IsCompletedSuccessfully) return ContinuePublish(pending, set.All, {j + 1}, notification, ct);");
+            w.Line("pending.GetAwaiter().GetResult();");
+        }
+
+        w.Close();
+        w.Line();
+        w.Line($"private sealed class {set}");
+        w.Open();
+
+        for (var j = 0; j < handlers.Count; j++)
+        {
+            w.Line($"public readonly {holders[j]} H{j};");
+        }
+
+        w.Line($"public readonly {array} All;");
+        w.Line();
+        w.Line($"public {set}({string.Join(", ", holders.Select((h, j) => $"{h} h{j}"))})");
+        w.Open();
+
+        for (var j = 0; j < handlers.Count; j++)
+        {
+            w.Line($"H{j} = h{j};");
+        }
+
+        w.Line($"All = [{string.Join(", ", handlers.Select((_, j) => $"h{j}"))}];");
+        w.Close();
         w.Close();
     }
 

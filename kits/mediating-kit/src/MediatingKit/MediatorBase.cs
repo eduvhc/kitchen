@@ -14,6 +14,7 @@ namespace MediatingKit;
 public abstract class MediatorBase : IMediator
 {
     private readonly MediatorRuntime _runtime;
+    private readonly bool _sequential;
 
     /// <summary>Creates the mediator over the container or scope it was resolved from.</summary>
     /// <param name="services">The container or scope that resolves handlers and behaviors.</param>
@@ -23,6 +24,7 @@ public abstract class MediatorBase : IMediator
 
         Services = services;
         _runtime = services.GetRequiredService<MediatorRuntime>();
+        _sequential = _runtime.NotificationPublishing == NotificationPublishing.Sequential;
     }
 
     /// <summary>The container or scope that resolves handlers and behaviors.</summary>
@@ -30,6 +32,12 @@ public abstract class MediatorBase : IMediator
 
     /// <summary>Whether a span or metric listener is attached. Checked per call.</summary>
     protected bool IsInstrumented => _runtime.Telemetry.IsActive;
+
+    /// <summary>
+    /// Whether a publish can call its handlers one after another from generated code: sequential publishing, and
+    /// nobody listening. Otherwise it goes through <see cref="PublishToHandlers{TNotification}"/>.
+    /// </summary>
+    protected bool PublishesInline => _sequential && !_runtime.Telemetry.IsActive;
 
     /// <inheritdoc />
     public abstract ValueTask<TResponse> Send<TResponse>(IRequest<TResponse> request, CancellationToken ct = default);
@@ -125,6 +133,35 @@ public abstract class MediatorBase : IMediator
         return _runtime.Telemetry.IsActive
             ? PublishInstrumented(handlers, notification, spanName, messageType, ct)
             : PublishCore(handlers, notification, ct);
+    }
+
+    /// <summary>
+    /// Finishes a publish that generated code started inline, once a handler did not complete synchronously: awaits
+    /// it, then runs the rest of <paramref name="handlers"/> in order.
+    /// </summary>
+    /// <typeparam name="TNotification">The notification type matched.</typeparam>
+    /// <param name="pending">The handler that is still running.</param>
+    /// <param name="handlers">Every handler, in the order the generated code calls them.</param>
+    /// <param name="next">The index of the first handler not yet called.</param>
+    /// <param name="notification">The notification.</param>
+    /// <param name="ct">The publisher's token.</param>
+    /// <returns>A task that completes when every handler has finished.</returns>
+    protected static async ValueTask ContinuePublish<TNotification>(
+        ValueTask pending,
+        INotificationHandler<TNotification>[] handlers,
+        int next,
+        TNotification notification,
+        CancellationToken ct)
+        where TNotification : INotification
+    {
+        ArgumentNullException.ThrowIfNull(handlers);
+
+        await pending.ConfigureAwait(false);
+
+        for (var i = next; i < handlers.Length; i++)
+        {
+            await handlers[i].Handle(notification, ct).ConfigureAwait(false);
+        }
     }
 
     /// <summary>Adapts a handler's <see cref="ValueTask"/> to the <see cref="Unit"/> response behaviors see.</summary>
@@ -256,28 +293,13 @@ public abstract class MediatorBase : IMediator
 
             if (!pending.IsCompletedSuccessfully)
             {
-                return AwaitRemaining(pending, handlers, i + 1, notification, ct);
+                return ContinuePublish(pending, handlers, i + 1, notification, ct);
             }
 
             pending.GetAwaiter().GetResult();
         }
 
         return default;
-
-        static async ValueTask AwaitRemaining(
-            ValueTask pending,
-            INotificationHandler<TNotification>[] handlers,
-            int next,
-            TNotification notification,
-            CancellationToken ct)
-        {
-            await pending.ConfigureAwait(false);
-
-            for (var i = next; i < handlers.Length; i++)
-            {
-                await handlers[i].Handle(notification, ct).ConfigureAwait(false);
-            }
-        }
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Every handler runs; failures are rethrown together.")]
