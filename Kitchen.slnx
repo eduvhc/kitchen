@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/benchmarks/">
+    <Project Path="kits/mediating-kit/benchmarks/MediatingKit.Benchmarks/MediatingKit.Benchmarks.csproj" />
     <Project Path="kits/validating-kit/benchmarks/ValidatingKit.Benchmarks/ValidatingKit.Benchmarks.csproj" />
   </Folder>
   <Folder Name="/src/">
@@ -9,6 +10,8 @@
     <Project Path="kits/locking-kit/src/LockingKit.Azure/LockingKit.Azure.csproj" />
     <Project Path="kits/locking-kit/src/LockingKit.Postgres/LockingKit.Postgres.csproj" />
     <Project Path="kits/locking-kit/src/LockingKit/LockingKit.csproj" />
+    <Project Path="kits/mediating-kit/src/MediatingKit.Generators/MediatingKit.Generators.csproj" />
+    <Project Path="kits/mediating-kit/src/MediatingKit/MediatingKit.csproj" />
     <Project Path="kits/messaging-kit/src/MessagingKit.Abstractions/MessagingKit.Abstractions.csproj" />
     <Project Path="kits/messaging-kit/src/MessagingKit.Analyzers/MessagingKit.Analyzers.csproj" />
     <Project Path="kits/messaging-kit/src/MessagingKit.InProcess/MessagingKit.InProcess.csproj" />
@@ -43,6 +46,7 @@
     <Project Path="kits/locking-kit/tests/LockingKit.IntegrationTests/LockingKit.IntegrationTests.csproj" />
     <Project Path="kits/locking-kit/tests/LockingKit.Postgres.UnitTests/LockingKit.Postgres.UnitTests.csproj" />
     <Project Path="kits/locking-kit/tests/LockingKit.UnitTests/LockingKit.UnitTests.csproj" />
+    <Project Path="kits/mediating-kit/tests/MediatingKit.UnitTests/MediatingKit.UnitTests.csproj" />
     <Project Path="kits/messaging-kit/tests/MessagingKit.IntegrationTests/MessagingKit.IntegrationTests.csproj" />
     <Project Path="kits/messaging-kit/tests/MessagingKit.TestSupport/MessagingKit.TestSupport.csproj" />
     <Project Path="kits/messaging-kit/tests/MessagingKit.UnitTests/MessagingKit.UnitTests.csproj" />

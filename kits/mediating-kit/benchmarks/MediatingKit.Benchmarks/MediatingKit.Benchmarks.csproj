@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The props the package ships: they enable the interceptor that replaces AddMediator(). -->
+  <Import Project="../../src/MediatingKit/build/MediatingKit.props" />
+
+  <!--
+    Compares MediatingKit with MediatR, martinothamar/Mediator and a direct handler call. Not a test project and not
+    packable, so neither `dotnet test` nor `dotnet pack` touches it. Run it with
+    `dotnet run -c Release` from this folder; the README has the full command.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <!-- BenchmarkDotNet generates and builds its own project per run; it needs optimised, non-test code. -->
+    <Optimize>true</Optimize>
+    <!-- BenchmarkDotNet runs public instance methods on public types only. -->
+    <NoWarn>$(NoWarn);CA1822;CA1515</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="MediatR" />
+    <PackageReference Include="Mediator.Abstractions" />
+    <PackageReference Include="Mediator.SourceGenerator">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <!-- MediatR refuses to start without an ILoggerFactory. -->
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/MediatingKit/MediatingKit.csproj" />
+    <ProjectReference Include="../../src/MediatingKit.Generators/MediatingKit.Generators.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

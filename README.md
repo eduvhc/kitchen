@@ -13,12 +13,13 @@ A family of small, independent .NET packages. Each kit owns one concern, version
 | [StoringKit](kits/storing-kit) | Object storage behind one contract: Azure Blob Storage, AWS S3, Cloudflare R2, MinIO | `StoringKit`, `.Azure`, `.S3` |
 | [LockingKit](kits/locking-kit) | Distributed locks behind one contract: renewal, loss signalling and fencing tokens on Azure blob leases or PostgreSQL advisory locks | `LockingKit`, `.Azure`, `.Postgres` |
 | [ValidatingKit](kits/validating-kit) | Fluent, dependency-free validation that returns `Result`s with field-level errors; automatic request validation for ASP.NET Core | `ValidatingKit`, `.AspNetCore` |
+| [MediatingKit](kits/mediating-kit) | In-process requests, notifications and pipeline behaviors, dispatched by code generated at compile time | `MediatingKit` |
 
 Each kit's own README documents its packages, and is what ships as the NuGet readme.
 
 ## The naming rule
 
-Every kit is `<Gerund>Kit` — the *-ing* form of what it does. Testing, Messaging, Mailing, Resulting, Storing, Validating, Locking, and later Authenticating, Billing, Scheduling, Caching.
+Every kit is `<Gerund>Kit` — the *-ing* form of what it does. Testing, Messaging, Mailing, Resulting, Storing, Validating, Locking, Mediating, and later Authenticating, Billing, Scheduling, Caching.
 
 Sub-packages extend the root with a dot: `TestingKit.Postgres`, `MessagingKit.Outbox`, `MailingKit.Smtp`. **One package per external dependency**, so a host on Resend never restores MailKit, and a module that only needs contracts never restores EF Core.
 
@@ -52,6 +53,7 @@ kitchen/
     storing-kit/
     validating-kit/
     locking-kit/
+    mediating-kit/
 ```
 
 Shared configuration lives once at the root. A kit's own `src/Directory.Build.props` adds only what is specific to it: its README and its version tag prefix.

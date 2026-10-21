@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>An in-process mediator whose dispatch is generated at compile time: requests, notifications, streams and pipeline behaviors, with missing or duplicate handlers reported as build errors.</Description>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <GeneratorAssembly>$(MSBuildThisFileDirectory)../MediatingKit.Generators/bin/$(Configuration)/netstandard2.0/MediatingKit.Generators.dll</GeneratorAssembly>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics" />
+  </ItemGroup>
+
+  <!--
+    The source generator ships inside this package, so referencing MediatingKit is all a project does to get a
+    generated mediator and its diagnostics. ReferenceOutputAssembly is false because the generator is tooling, not a
+    runtime dependency; only its assembly is packed.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="../MediatingKit.Generators/MediatingKit.Generators.csproj"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="$(GeneratorAssembly)"
+          Pack="true"
+          PackagePath="analyzers/dotnet/cs"
+          Visible="false" />
+    <!-- Lets the generated AddMediator() replace the call site; see the file. -->
+    <None Include="build/MediatingKit.props" Pack="true" PackagePath="build/;buildTransitive/" />
+  </ItemGroup>
+
+  <!--
+    A missing generator would otherwise pack silently, shipping a release in which AddMediator() throws.
+  -->
+  <Target Name="EnsureGeneratorIsPacked" BeforeTargets="GenerateNuspec">
+    <Error Condition="!Exists('$(GeneratorAssembly)')"
+           Text="MediatingKit.Generators.dll was not found at '$(GeneratorAssembly)'. Build the generator in the $(Configuration) configuration before packing, or the package ships without its mediator." />
+  </Target>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MediatingKit.UnitTests" />
+  </ItemGroup>
+
+</Project>

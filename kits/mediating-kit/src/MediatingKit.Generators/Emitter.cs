@@ -1,0 +1,583 @@
+using System.Collections.Immutable;
+using System.Text;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+
+namespace MediatingKit.Generators;
+
+/// <summary>Reports the diagnostics and writes the exports class and the mediator.</summary>
+internal static class Emitter
+{
+    private const string Unit = "global::MediatingKit.Unit";
+    private const string VoidRequest = "global::MediatingKit.IRequest";
+
+    public static void Execute(
+        SourceProductionContext context,
+        ImmutableArray<DeclaredType> declared,
+        ImmutableArray<InterceptedCall> calls,
+        ReferencedHandlers references)
+    {
+        if (!references.IsMediatingKitReferenced)
+        {
+            return;
+        }
+
+        // A partial type is seen once per declaration; its model is the same each time.
+        var types = declared
+            .GroupBy(t => t.FullType, StringComparer.Ordinal)
+            .Select(g => g.First())
+            .ToList();
+
+        foreach (var diagnostic in types.SelectMany(t => t.Diagnostics))
+        {
+            context.ReportDiagnostic(diagnostic.ToDiagnostic());
+        }
+
+        var own = types.SelectMany(t => t.Handlers).ToList();
+        var all = own.Concat(references.Handlers).ToList();
+
+        ReportDuplicates(context, all);
+
+        if (types.Any(t => t.IsHandler))
+        {
+            ReportMissing(context, types, all);
+        }
+
+        var exportable = own.Where(h => h.IsExportable).ToList();
+
+        if (exportable.Count > 0)
+        {
+            context.AddSource("MediatingKit.Exports.g.cs", EmitExports(references.AssemblyName, exportable));
+        }
+
+        if (calls.Length > 0)
+        {
+            context.AddSource("MediatingKit.Mediator.g.cs", EmitMediator(calls, own, all, references.ExportClasses));
+        }
+    }
+
+    private static void ReportDuplicates(SourceProductionContext context, List<HandlerInfo> all)
+    {
+        var groups = all
+            .Where(h => h.Kind != HandlerKind.Notification)
+            .GroupBy(h => (Stream: h.Kind == HandlerKind.Stream, h.MessagePattern))
+            .Where(g => g.Select(h => h.HandlerType).Distinct(StringComparer.Ordinal).Count() > 1);
+
+        foreach (var group in groups)
+        {
+            var names = string.Join(", ", group.Select(h => h.HandlerName).Distinct(StringComparer.Ordinal).OrderBy(n => n, StringComparer.Ordinal));
+            var located = group.Where(h => h.Location is not null).ToList();
+            var message = group.First().MessageName;
+
+            if (located.Count == 0)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(Diagnostics.DuplicateHandler, Location.None, message, names));
+                continue;
+            }
+
+            foreach (var handler in located)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(Diagnostics.DuplicateHandler, handler.Location!.ToLocation(), message, names));
+            }
+        }
+    }
+
+    private static void ReportMissing(SourceProductionContext context, List<DeclaredType> types, List<HandlerInfo> all)
+    {
+        foreach (var type in types.Where(t => t.RequestHint is not null))
+        {
+            var accepted = new HashSet<string>(type.SuperTypes, StringComparer.Ordinal) { type.FullType };
+            var handled = all.Any(h =>
+                (type.IsStreamRequest ? h.Kind == HandlerKind.Stream : h.IsRequestKind) && accepted.Contains(h.MessagePattern));
+
+            if (!handled)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    Diagnostics.MissingHandler,
+                    type.Location?.ToLocation() ?? Location.None,
+                    type.Name,
+                    type.RequestHint));
+            }
+        }
+    }
+
+    private static string EmitExports(string assemblyName, List<HandlerInfo> handlers)
+    {
+        var className = "MediatorExports_" + Sanitize(assemblyName);
+        var w = new CodeWriter();
+
+        WriteHeader(w);
+        w.Line($"[assembly: global::MediatingKit.MediatorExportsAttribute(typeof(global::MediatingKit.Generated.{className}))]");
+        w.Line();
+        w.Line("namespace MediatingKit.Generated");
+        w.Open();
+        w.Line("/// <summary>This project's handlers, for the mediator generated in a project that references it. Not for direct use.</summary>");
+        w.Line("[global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]");
+        WriteGeneratedCode(w);
+        w.Line($"public static class {className}");
+        w.Open();
+        w.Line("/// <summary>Registers the handlers listed here.</summary>");
+        w.Line("public static void Register(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::Microsoft.Extensions.DependencyInjection.ServiceLifetime lifetime)");
+        w.Open();
+
+        foreach (var handlerType in handlers.Select(h => h.HandlerType).Distinct(StringComparer.Ordinal))
+        {
+            WriteTryAdd(w, handlerType);
+        }
+
+        w.Close();
+
+        for (var i = 0; i < handlers.Count; i++)
+        {
+            var handler = handlers[i];
+            w.Line();
+            w.Line($"/// <summary>Resolves {Escape(handler.HandlerName)}.</summary>");
+            w.Line($"public static {handler.InterfaceType} Handler{i}(global::System.IServiceProvider services) =>");
+            w.Line($"    global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<{handler.HandlerType}>(services);");
+        }
+
+        w.Close();
+        w.Close();
+
+        return w.ToString();
+    }
+
+    private static string EmitMediator(
+        ImmutableArray<InterceptedCall> calls,
+        List<HandlerInfo> own,
+        List<HandlerInfo> all,
+        EquatableArray<string> exportClasses)
+    {
+        var requests = Cases(all.Where(h => h.IsRequestKind));
+        var streams = Cases(all.Where(h => h.Kind == HandlerKind.Stream));
+        var notifications = NotificationCases(all.Where(h => h.Kind == HandlerKind.Notification).ToList());
+
+        var w = new CodeWriter();
+
+        WriteHeader(w);
+        w.Line("namespace MediatingKit.Generated");
+        w.Open();
+
+        // The interceptor.
+        WriteGeneratedCode(w);
+        w.Line("file static class MediatorRegistrationInterceptor");
+        w.Open();
+
+        foreach (var call in calls.Distinct())
+        {
+            w.Line($"// {call.DisplayLocation}");
+            w.Line($"[global::System.Runtime.CompilerServices.InterceptsLocation({call.Version}, {Literal(call.Data)})]");
+        }
+
+        w.Line("public static global::Microsoft.Extensions.DependencyInjection.IServiceCollection AddMediator(");
+        w.Line("    this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services,");
+        w.Line("    global::System.Action<global::MediatingKit.MediatorOptions>? configure = null) =>");
+        w.Line("    global::MediatingKit.MediatorRegistration.Register(");
+        w.Line("        services,");
+        w.Line("        configure,");
+        w.Line("        typeof(GeneratedMediator),");
+        w.Line("        static services => new GeneratedMediator(services),");
+        w.Line("        RegisterHandlers,");
+        w.Line($"        requestTypes: {requests.Count});");
+        w.Line();
+        w.Line("private static void RegisterHandlers(global::Microsoft.Extensions.DependencyInjection.IServiceCollection services, global::Microsoft.Extensions.DependencyInjection.ServiceLifetime lifetime)");
+        w.Open();
+
+        foreach (var handlerType in own.Select(h => h.HandlerType).Distinct(StringComparer.Ordinal))
+        {
+            WriteTryAdd(w, handlerType);
+        }
+
+        foreach (var exports in exportClasses)
+        {
+            w.Line($"{exports}.Register(services, lifetime);");
+        }
+
+        w.Close();
+        w.Close();
+        w.Line();
+
+        // The mediator.
+        w.Line("/// <summary>The mediator for this project: one typed field and one type check per handler.</summary>");
+        WriteGeneratedCode(w);
+        w.Line("file sealed class GeneratedMediator : global::MediatingKit.MediatorBase");
+        w.Open();
+        w.Line("public GeneratedMediator(global::System.IServiceProvider services)");
+        w.Line("    : base(services)");
+        w.Open();
+        w.Close();
+
+        WriteSend(w, requests);
+        WriteSendVoid(w, requests);
+        WriteRequestCases(w, requests);
+        WriteStreams(w, streams);
+        WritePublish(w, notifications);
+
+        w.Close();
+        w.Close();
+        w.Line();
+
+        w.Line("namespace System.Runtime.CompilerServices");
+        w.Open();
+        WriteGeneratedCode(w);
+        w.Line("[global::System.AttributeUsage(global::System.AttributeTargets.Method, AllowMultiple = true)]");
+        w.Line("file sealed class InterceptsLocationAttribute : global::System.Attribute");
+        w.Open();
+        w.Line("public InterceptsLocationAttribute(int version, string data)");
+        w.Open();
+        w.Line("_ = version;");
+        w.Line("_ = data;");
+        w.Close();
+        w.Close();
+        w.Close();
+
+        return w.ToString();
+    }
+
+    private static void WriteSend(CodeWriter w, List<HandlerInfo> requests)
+    {
+        w.Line();
+        w.Line("public override global::System.Threading.Tasks.ValueTask<TResponse> Send<TResponse>(global::MediatingKit.IRequest<TResponse> request, global::System.Threading.CancellationToken ct = default)");
+        w.Open();
+
+        for (var i = 0; i < requests.Count; i++)
+        {
+            var handler = requests[i];
+            var response = handler.Kind == HandlerKind.VoidRequest ? Unit : handler.ResponseType;
+            var call = handler.Kind == HandlerKind.VoidRequest ? $"ToUnit(Send{i}(r{i}, ct))" : $"Send{i}(r{i}, ct)";
+
+            // BitCast retypes the value; Unsafe.As over a local would force it through a stack slot first.
+            w.Line($"if (request is {handler.MessagePattern} r{i}{ResponseGuard(handler)})");
+            w.Line($"    return global::System.Runtime.CompilerServices.Unsafe.BitCast<global::System.Threading.Tasks.ValueTask<{response}>, global::System.Threading.Tasks.ValueTask<TResponse>>({call});");
+            w.Line();
+        }
+
+        w.Line("return ThrowNoHandler<global::System.Threading.Tasks.ValueTask<TResponse>>(request);");
+        w.Close();
+    }
+
+    private static void WriteSendVoid(CodeWriter w, List<HandlerInfo> requests)
+    {
+        w.Line();
+        w.Line("public override global::System.Threading.Tasks.ValueTask Send(global::MediatingKit.IRequest request, global::System.Threading.CancellationToken ct = default)");
+        w.Open();
+
+        for (var i = 0; i < requests.Count; i++)
+        {
+            var handler = requests[i];
+
+            // A pattern the compiler can prove never matches an IRequest is an error, so only requests that are one.
+            if (!handler.MessageIsVoidRequest && handler.MessagePattern != VoidRequest)
+            {
+                continue;
+            }
+
+            if (handler.Kind == HandlerKind.VoidRequest)
+            {
+                w.Line($"if (request is {handler.MessagePattern} r{i}) return Send{i}(r{i}, ct);");
+            }
+            else if (handler.ResponsePattern == Unit)
+            {
+                w.Line($"if (request is {handler.MessagePattern} r{i}) return ToValueTask(Send{i}(r{i}, ct));");
+            }
+        }
+
+        w.Line("return ThrowNoHandler<global::System.Threading.Tasks.ValueTask>(request);");
+        w.Close();
+    }
+
+    /// <summary>
+    /// Three methods per request type. <c>Send{i}</c> is the hot path: with the handler resolved, no behavior and nobody
+    /// listening, it calls the handler directly. Its guard is one non-null test and one bool, both of which the JIT
+    /// predicts the fast way; a null test that has to succeed would make it treat the fast path as cold. <c>Slow{i}</c> resolves the handler on first use and runs behaviors and
+    /// telemetry. <c>Initialize{i}</c> builds a pipeline only if a behavior applies, so a scope that never has one
+    /// allocates nothing for it beyond the handler.
+    /// </summary>
+    /// <remarks>
+    /// <c>Send{i}</c> is deliberately not inlined into <c>Send</c>: compiled on its own it writes the response straight
+    /// into the caller's return buffer, whereas inlined, the JIT merges its paths through a stack temporary whose
+    /// copy-out stalls on store forwarding, costing more than the call.
+    /// </remarks>
+    private static void WriteRequestCases(CodeWriter w, List<HandlerInfo> requests)
+    {
+        const string NoInline = "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]";
+        const string Volatile = "global::System.Threading.Volatile";
+
+        for (var i = 0; i < requests.Count; i++)
+        {
+            var handler = requests[i];
+            var isVoid = handler.Kind == HandlerKind.VoidRequest;
+            var holder = handler.ExportAccessor is null ? handler.HandlerType : handler.InterfaceType;
+            var generics = isVoid ? $"{holder}, {handler.MessageType}" : $"{holder}, {handler.MessageType}, {handler.ResponseType}";
+            var pipelineType = isVoid
+                ? $"global::MediatingKit.VoidRequestPipeline<{generics}>"
+                : $"global::MediatingKit.RequestPipeline<{generics}>";
+            var create = isVoid ? $"CreateVoidPipeline<{generics}>(handler)" : $"CreatePipeline<{generics}>(handler)";
+            var createIfAny = isVoid ? $"CreateVoidPipelineIfAny<{generics}>(handler, {i})" : $"CreatePipelineIfAny<{generics}>(handler, {i})";
+            var returns = isVoid
+                ? "global::System.Threading.Tasks.ValueTask"
+                : $"global::System.Threading.Tasks.ValueTask<{handler.ResponseType}>";
+            var call = $"(({handler.InterfaceType})handler).Handle(request, ct)";
+            var dispatch = $"Dispatch((pipeline ??= _pipeline{i} = {create}).Invoke, request, {Literal("send " + handler.MessageName)}, {Literal(handler.MessageFullName)}, ct)";
+            var behaviors = "first.Handle(request, pipeline.Next, ct)";
+
+            w.Line();
+            w.Line($"private {holder}? _handler{i};");
+            w.Line($"private {holder}? _direct{i};");
+            w.Line($"private {pipelineType}? _pipeline{i};");
+            w.Line();
+            w.Line(NoInline);
+            w.Line($"private {returns} Send{i}({handler.MessageType} request, global::System.Threading.CancellationToken ct)");
+            w.Open();
+            w.Line($"var handler = {Volatile}.Read(ref _direct{i});");
+            w.Line($"if (handler is not null & !IsInstrumented) return (({handler.InterfaceType})handler!).Handle(request, ct);");
+            w.Line($"return Slow{i}(request, ct);");
+            w.Close();
+            w.Line();
+            w.Line(NoInline);
+            w.Line($"private {returns} Slow{i}({handler.MessageType} request, global::System.Threading.CancellationToken ct)");
+            w.Open();
+            w.Line($"var handler = {Volatile}.Read(ref _handler{i}) ?? Initialize{i}();");
+            w.Line($"var pipeline = _pipeline{i};");
+            w.Line(isVoid ? $"if (IsInstrumented) return ToValueTask({dispatch});" : $"if (IsInstrumented) return {dispatch};");
+            w.Line(isVoid
+                ? $"if (pipeline?.First is {{ }} first) return ToValueTask({behaviors});"
+                : $"if (pipeline?.First is {{ }} first) return {behaviors};");
+            w.Line($"return {call};");
+            w.Close();
+            w.Line();
+            w.Line($"private {holder} Initialize{i}()");
+            w.Open();
+            w.Line($"var handler = {Resolve(handler)};");
+            w.Line($"var pipeline = _pipeline{i} = {createIfAny};");
+            w.Line($"{Volatile}.Write(ref _handler{i}, handler);");
+            w.Line($"if (pipeline is null) {Volatile}.Write(ref _direct{i}, handler);");
+            w.Line("return handler;");
+            w.Close();
+        }
+    }
+
+    private static void WriteStreams(CodeWriter w, List<HandlerInfo> streams)
+    {
+        for (var i = 0; i < streams.Count; i++)
+        {
+            w.Line();
+            w.Line($"private {streams[i].InterfaceType}? _stream{i};");
+        }
+
+        w.Line();
+        w.Line("public override global::System.Collections.Generic.IAsyncEnumerable<TResponse> CreateStream<TResponse>(global::MediatingKit.IStreamRequest<TResponse> request, global::System.Threading.CancellationToken ct = default)");
+        w.Open();
+
+        for (var i = 0; i < streams.Count; i++)
+        {
+            var handler = streams[i];
+
+            w.Line($"if (request is {handler.MessagePattern} s{i}{ResponseGuard(handler)})");
+            w.Open();
+            w.Line($"var handler = _stream{i} ??= {Resolve(handler)};");
+            w.Line($"return global::System.Runtime.CompilerServices.Unsafe.As<global::System.Collections.Generic.IAsyncEnumerable<TResponse>>(handler.Handle(s{i}, ct));");
+            w.Close();
+            w.Line();
+        }
+
+        w.Line("return ThrowNoHandler<global::System.Collections.Generic.IAsyncEnumerable<TResponse>>(request);");
+        w.Close();
+    }
+
+    private static void WritePublish(CodeWriter w, List<(HandlerInfo Case, List<HandlerInfo> Handlers)> notifications)
+    {
+        w.Line();
+        w.Line("public override global::System.Threading.Tasks.ValueTask Publish<TNotification>(TNotification notification, global::System.Threading.CancellationToken ct = default)");
+        w.Open();
+
+        for (var i = 0; i < notifications.Count; i++)
+        {
+            w.Line($"if (notification is {notifications[i].Case.MessagePattern} n{i}) return Publish{i}(n{i}, ct);");
+        }
+
+        w.Line();
+        w.Line("// A notification nobody handles is not an error.");
+        w.Line("return notification is null ? ThrowNoHandler<global::System.Threading.Tasks.ValueTask>(null) : default;");
+        w.Close();
+
+        for (var i = 0; i < notifications.Count; i++)
+        {
+            WritePublishCase(w, i, notifications[i].Case, notifications[i].Handlers);
+        }
+    }
+
+    /// <summary>
+    /// One notification type's handlers, resolved once into a holder with a typed field each, so a sequential publish
+    /// calls them one after another directly: no array walk, and no interface dispatch for a sealed handler.
+    /// </summary>
+    private static void WritePublishCase(CodeWriter w, int i, HandlerInfo match, List<HandlerInfo> handlers)
+    {
+        var set = $"PublishSet{i}";
+        var array = $"global::MediatingKit.INotificationHandler<{match.MessageType}>[]";
+        var holders = handlers.Select(h => h.ExportAccessor is null ? h.HandlerType : h.InterfaceType).ToList();
+
+        w.Line();
+        w.Line($"private {set}? _notification{i};");
+        w.Line();
+        w.Line($"private global::System.Threading.Tasks.ValueTask Publish{i}({match.MessageType} notification, global::System.Threading.CancellationToken ct)");
+        w.Open();
+        w.Line($"var set = _notification{i} ??= new {set}({string.Join(", ", handlers.Select(Resolve))});");
+        w.Line($"if (!PublishesInline) return PublishToHandlers(set.All, notification, {Literal("publish " + match.MessageName)}, {Literal(match.MessageFullName)}, ct);");
+
+        for (var j = 0; j < handlers.Count; j++)
+        {
+            var call = $"(({handlers[j].InterfaceType})set.H{j}).Handle(notification, ct)";
+
+            if (j == handlers.Count - 1)
+            {
+                w.Line($"return {call};");
+                break;
+            }
+
+            w.Line(j == 0 ? $"var pending = {call};" : $"pending = {call};");
+            w.Line($"if (!pending.IsCompletedSuccessfully) return ContinuePublish(pending, set.All, {j + 1}, notification, ct);");
+            w.Line("pending.GetAwaiter().GetResult();");
+        }
+
+        w.Close();
+        w.Line();
+        w.Line($"private sealed class {set}");
+        w.Open();
+
+        for (var j = 0; j < handlers.Count; j++)
+        {
+            w.Line($"public readonly {holders[j]} H{j};");
+        }
+
+        w.Line($"public readonly {array} All;");
+        w.Line();
+        w.Line($"public {set}({string.Join(", ", holders.Select((h, j) => $"{h} h{j}"))})");
+        w.Open();
+
+        for (var j = 0; j < handlers.Count; j++)
+        {
+            w.Line($"H{j} = h{j};");
+        }
+
+        w.Line($"All = [{string.Join(", ", handlers.Select((_, j) => $"h{j}"))}];");
+        w.Close();
+        w.Close();
+    }
+
+    /// <summary>
+    /// One case per message type, most derived first, so a request matched through a base-type handler never shadows
+    /// one with its own.
+    /// </summary>
+    private static List<HandlerInfo> Cases(IEnumerable<HandlerInfo> handlers) =>
+        handlers
+            .GroupBy(h => h.MessagePattern, StringComparer.Ordinal)
+            .Select(g => g.First())
+            .OrderByDescending(h => h.Depth)
+            .ThenBy(h => h.MessagePattern, StringComparer.Ordinal)
+            .ToList();
+
+    /// <summary>
+    /// One case per notification type with a handler, each listing the handlers for the type itself, then those for
+    /// its base types and interfaces, most specific first.
+    /// </summary>
+    private static List<(HandlerInfo Case, List<HandlerInfo> Handlers)> NotificationCases(List<HandlerInfo> handlers) =>
+        Cases(handlers)
+            .Select(match =>
+            {
+                var accepted = new HashSet<string>(match.MessageSuperTypes, StringComparer.Ordinal);
+                var applicable = handlers
+                    .Where(h => h.MessagePattern == match.MessagePattern || accepted.Contains(h.MessagePattern))
+                    .GroupBy(h => h.ExportAccessor ?? h.HandlerType, StringComparer.Ordinal)
+                    .Select(g => g.First())
+                    .OrderBy(h => h.MessagePattern == match.MessagePattern ? 0 : 1)
+                    .ThenByDescending(h => h.Depth)
+                    .ThenBy(h => h.HandlerType, StringComparer.Ordinal)
+                    .ToList();
+
+                return (match, applicable);
+            })
+            .ToList();
+
+    /// <summary>
+    /// A sealed message type pins the response type, which the generic method relies on to reinterpret the task.
+    /// Anything that could be subclassed is checked at runtime as well.
+    /// </summary>
+    private static string ResponseGuard(HandlerInfo handler)
+    {
+        if (handler.MessageIsExact)
+        {
+            return string.Empty;
+        }
+
+        var response = handler.Kind == HandlerKind.VoidRequest ? Unit : handler.ResponsePattern;
+        return $" && typeof(TResponse) == typeof({response})";
+    }
+
+    private static string Resolve(HandlerInfo handler) =>
+        handler.ExportAccessor is null ? $"GetHandler<{handler.HandlerType}>()" : $"{handler.ExportAccessor}(Services)";
+
+    private static void WriteTryAdd(CodeWriter w, string handlerType) =>
+        w.Line($"global::Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAdd(services, new global::Microsoft.Extensions.DependencyInjection.ServiceDescriptor(typeof({StripNullable(handlerType)}), typeof({StripNullable(handlerType)}), lifetime));");
+
+    private static void WriteHeader(CodeWriter w)
+    {
+        w.Line("// <auto-generated/>");
+        w.Line("#nullable enable");
+        w.Line("#pragma warning disable CS1591");
+        w.Line();
+    }
+
+    private static void WriteGeneratedCode(CodeWriter w) =>
+        w.Line("[global::System.CodeDom.Compiler.GeneratedCode(\"MediatingKit.Generators\", \"1.0.0\")]");
+
+    private static string Literal(string value) => SymbolDisplay.FormatLiteral(value, quote: true);
+
+    private static string Escape(string value) =>
+        value.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+
+    private static string StripNullable(string type) => type.TrimEnd('?');
+
+    private static string Sanitize(string name)
+    {
+        var builder = new StringBuilder(name.Length);
+
+        foreach (var c in name)
+        {
+            builder.Append(char.IsLetterOrDigit(c) ? c : '_');
+        }
+
+        return builder.ToString();
+    }
+
+    private sealed class CodeWriter
+    {
+        private readonly StringBuilder _builder = new();
+        private int _indent;
+
+        public void Line(string text = "")
+        {
+            if (text.Length > 0)
+            {
+                _builder.Append(' ', _indent * 4);
+                _builder.Append(text);
+            }
+
+            _builder.Append('\n');
+        }
+
+        public void Open()
+        {
+            Line("{");
+            _indent++;
+        }
+
+        public void Close()
+        {
+            _indent--;
+            Line("}");
+        }
+
+        public override string ToString() => _builder.ToString();
+    }
+}
