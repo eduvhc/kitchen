@@ -10,7 +10,7 @@
     <PackageVersion Include="Azure.Storage.Blobs" Version="12.30.1" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="FluentValidation" Version="12.2.0" />
-    <PackageVersion Include="MSTest" Version="4.5.1" />
+    <PackageVersion Include="MSTest" Version="4.5.2" />
     <PackageVersion Include="MailKit" Version="4.18.1" />
     <PackageVersion Include="MediatR" Version="14.2.0" />
     <PackageVersion Include="Mediator.Abstractions" Version="3.0.2" />
